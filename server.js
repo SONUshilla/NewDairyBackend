@@ -76,7 +76,6 @@ app.use((req, res, next) => {
   next();
 });
 app.get("/",(req,res)=>{
-  console.log(" i am running ");
 });
 app.post('/entries/morning', (req, res) => {
   // Access the values submitted from the form
