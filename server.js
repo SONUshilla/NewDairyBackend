@@ -15,17 +15,32 @@ import multer from "multer";
 import { createWorker } from "tesseract.js";
 import tesseract from "node-tesseract-ocr";
 
-const app = express();
+const { Client } = pg;
 env.config();
 
-const db=new pg.Client({
-  user:"postgres",
-  host:"localhost",
-  password:"Sonu@123",
-  database:"DAIRY",
-  port:"5432"
+// Create a new PostgreSQL client instance with connection string
+const db = new Client({
+  connectionString: process.env.POSTGRES_CONNECTION_STRING, // Use environment variable for connection string
+  ssl: {
+    rejectUnauthorized: false // Add this line to allow connection to Render's PostgreSQL with SSL
+  }
 });
-db.connect();
+
+db.connect()
+  .then(() => console.log('Connected to PostgreSQL database'))
+  .catch(err => console.error('Error connecting to PostgreSQL database', err));
+
+// Configure Express app
+const app = express();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}));
+app.use(cors());
+app.use(helmet());
 app.use(bodyParser.json({ limit: "10mb" })); // Adjust the limit as needed
 // Middleware to parse JSON bodies
 app.use(express.json());
