@@ -34,7 +34,7 @@ db.connect()
 const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({ secret: 'somevalue' }));
+app.use(session({ secret: "somevalue" }));
 app.use(cors());
 app.use(helmet());
 app.use(bodyParser.json({ limit: "10mb" })); // Adjust the limit as needed
