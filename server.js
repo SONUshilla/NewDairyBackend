@@ -14,7 +14,7 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import { createWorker } from "tesseract.js";
 import tesseract from "node-tesseract-ocr";
-
+const PORT = process.env.PORT || 5000;
 const { Client } = pg;
 env.config();
 
@@ -900,6 +900,6 @@ app.post("/ocr", async (req, res) => {
 
 
 // Start the server
-app.listen(5000, () => {
-  console.log(`Server is running on port ${5000}`);
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
