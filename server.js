@@ -35,7 +35,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: "secret",
   resave: false,
   saveUninitialized: false
 }));
