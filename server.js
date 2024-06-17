@@ -34,7 +34,7 @@ db.connect()
 const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({ secret: 'somevalue' }));
+app.use(session({ secret: "somevalue" }));
 app.use(cors());
 app.use(helmet());
 app.use(bodyParser.json({ limit: "10mb" })); // Adjust the limit as needed
@@ -74,6 +74,9 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   next();
+});
+app.get("/",(req,res)=>{
+  console.log(" i am running ");
 });
 app.post('/entries/morning', (req, res) => {
   // Access the values submitted from the form
@@ -903,3 +906,5 @@ app.post("/ocr", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+
