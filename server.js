@@ -1,5 +1,5 @@
 import { compare } from "bcrypt";
-import express from "express";
+import express, { response } from "express";
 import env from "dotenv";
 import pg from "pg";
 import moment from "moment";
@@ -14,16 +14,20 @@ import bcrypt from "bcrypt";
 import multer from "multer";
 import { createWorker } from "tesseract.js";
 import tesseract from "node-tesseract-ocr";
-const PORT = process.env.PORT || 5000;
+
 const { Client } = pg;
 env.config();
 
-// Create a new PostgreSQL client instance with connection string
+
+
+// Create a new PostgreSQL client instance with explicit connection parameters
 const db = new Client({
-  connectionString: process.env.POSTGRES_CONNECTION_STRING, // Use environment variable for connection string
-  ssl: {
-    rejectUnauthorized: false // Add this line to allow connection to Render's PostgreSQL with SSL
-  }
+  user: 'postgres',
+  host: 'localhost',
+  password: 'Sonu@123',
+  database: 'DAIRY',
+  port: 5432,
+
 });
 
 db.connect()
@@ -34,8 +38,35 @@ db.connect()
 const app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({ secret: "somevalue" }));
-app.use(cors());
+app.use(session({
+  name: 'connection.sid', // Change the cookie name here
+  secret: 'your_secret_key',
+  resave: false,
+  sameSite:'lax',
+  saveUninitialized: false,
+  cookie: { secure: false,
+    httpOnly: false,
+    path: '/',
+    maxAge: 3600000 } // Set cookie options
+}));
+const corsOptions = {
+  origin: 'http://localhost:3000',//https://newdairyfrontend.onrender.com || http://localhost:3000
+  credentials: true,
+  optionsSuccessStatus: 200,
+  exposedHeaders: ["Set-Cookie"],
+};
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3000'); // Allow requests from this origin
+  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials (cookies)
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, userid'); // Include 'userid'
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allow these methods
+  if (req.method === 'OPTIONS') {
+      return res.sendStatus(200); // Respond to OPTIONS requests
+  }
+  next();
+});
+app.use(cors(corsOptions));
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(bodyParser.json({ limit: "10mb" })); // Adjust the limit as needed
 // Middleware to parse JSON bodies
@@ -47,7 +78,7 @@ app.use(session({
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
     secure: false, // Set to true if using HTTPS
-    httpOnly: true, // Cookie accessible only by the web server
+    httpOnly:false,
   }
 }));
 console.log("for commit");
@@ -55,35 +86,15 @@ console.log("for commit");
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 app.use(passport.session());
-// Enable CORS
-app.use(cors({
-  origin: 'http://localhost:3000'
-}));
-app.use(helmet({
-  contentSecurityPolicy: {
-      directives: {
-          defaultSrc: ["'self'"],
-          fontSrc: ["'self'", "data:"],
-          // Add other directives as needed
-      }
-  }
-}));
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  next();
-});
-app.get("/",(req,res)=>{
-});
+
+
 app.post('/entries/morning', (req, res) => {
   // Access the values submitted from the form
   const { date, weight, fat, price } = req.body;
   console.log(date);
   const sqlDate = moment(date).format('YYYY-MM-DD');
 
-  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.id])
+  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("data inserting successfully");
@@ -99,7 +110,7 @@ app.post('/entries/evening', (req, res) => {
   
   const sqlDate = moment(date).format('YYYY-MM-DD');
   
-  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.id])
+  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("Data inserted successfully");
@@ -117,7 +128,7 @@ app.post('/admin/entries/morning', (req, res) => {
   console.log("admin morning");
   const sqlDate = moment(date).format('YYYY-MM-DD');
 
-  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.id])
+  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("data inserting successfully");
@@ -133,7 +144,7 @@ app.post('/admin/entries/evening', (req, res) => {
   console.log("admin evening");
   const sqlDate = moment(date).format('YYYY-MM-DD');
   
-  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.id])
+  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("Data inserted successfully");
@@ -168,7 +179,7 @@ console.log("request is here");
 //admin balance 
 app.post("/admin/balanceSheet", (req, res) => {
   const { startDate, endDate,userId } = req.body;
-  console.log(req.user.id);
+  console.log(req.user.user_id);
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
@@ -200,7 +211,7 @@ app.post("/admin/balanceSheet", (req, res) => {
 //
 app.post('/admin/showBalance', (req, res) => {
   const { startDate, endDate,userId } = req.body;
-  console.log(req.user.id);
+  console.log(req.user.user_id);
 
   // Query to retrieve total sum of milk and total sum of all items for morning entries
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
@@ -271,7 +282,7 @@ app.post('/admin/showBalance', (req, res) => {
  // Assuming db.query and other necessary imports are already present
  
  app.post('/adduser', async (req, res) => {
-   const adminUserId = req.user.id; // Assuming req.user.id contains the user ID of the admin
+   const adminUserId = req.user.user_id; // Assuming req.user.user_id contains the user ID of the admin
    const { mobileEmail, name, password } = req.body; // Assuming the request body contains mobileEmail, name, and password
  
    try {
@@ -302,7 +313,7 @@ app.post('/admin/showBalance', (req, res) => {
  // changing role of the user 
  app.post('/admin/associated', async (req, res) => {
   const { username, password } = req.body;
-  const userId = req.user.id; // Assuming req.user.id contains the user ID
+  const userId = req.user.user_id; // Assuming req.user.user_id contains the user ID
 
   try {
     // Fetch user from the database by username
@@ -327,7 +338,7 @@ app.post('/register-admin', async (req, res) => {
   const { name, contact, dairyNumber, address, password, confirmPassword} = req.body;
 console.log("req here");
 
-
+ 
   try {
     // Check if mobile number or email already exists
     const checkUserResult = await db.query("SELECT COUNT(*) FROM users WHERE username = $1", [contact]);
@@ -370,7 +381,7 @@ console.log("req here");
 const checkBothRole = async (req, res, next) => {
   try {
     // Fetch user's role from the database
-    const user = await db.query("SELECT role FROM users WHERE id = $1", [req.user.id]);
+    const user = await db.query("SELECT role FROM users WHERE id = $1", [req.user.user_id]);
 
     // If user's role is not "both", send an error response
     if (user.rows.length === 0 || user.rows[0].role !== 'both') {
@@ -389,7 +400,7 @@ const checkBothRole = async (req, res, next) => {
 app.get('/bothAuth', checkBothRole, async (req, res) => {
   try {
     // Fetch the user_id from the users table
-    const user = await db.query("SELECT user_id FROM users WHERE id = $1", [req.user.id]);
+    const user = await db.query("SELECT user_id FROM users WHERE id = $1", [req.user.user_id]);
     const user_id = user.rows[0].user_id; // Extract user_id from the query result
 
     // If user's role is "both", send the user's ID
@@ -403,7 +414,7 @@ app.get('/bothAuth', checkBothRole, async (req, res) => {
 
 app.post('/showEntries', async (req, res) => {
   const { startDate, endDate } = req.body;
-  const userId = req.user.id; // Get user ID
+  const userId = req.user.user_id; // Get user ID
 
   try {
     const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
@@ -415,7 +426,7 @@ app.post('/showEntries', async (req, res) => {
     const eveningEntries = eveningData.rows;
     const morningTotal = morningSum.rows[0];
     const eveningTotal = eveningSum.rows[0];
-
+    console.log(morningEntries);
     res.send({ morningEntries, eveningEntries, morningTotal, eveningTotal });
   } catch (error) {
     // Handle error
@@ -471,7 +482,7 @@ app.post("/addMoney", (req, res) => {
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
   const date=req.body.date;
-db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,moneyAmount,req.user.id])
+db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,moneyAmount,req.user.user_id])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -488,7 +499,7 @@ app.post("/receiveMoney", (req, res) => {
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
   const date=req.body.date;
- db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,-moneyAmount,req.user.id])
+ db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,-moneyAmount,req.user.user_id])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -506,7 +517,7 @@ app.post("/items", (req, res) => {
   const price = req.body.price;
   const item =req.body.selectedOption;
   const date=req.body.date;
-  db.query("INSERT INTO borrow(date,item,price,quantity,money, user_id) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,price, quantity,(price*quantity),req.user.id])
+  db.query("INSERT INTO borrow(date,item,price,quantity,money, user_id) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,price, quantity,(price*quantity),req.user.user_id])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -519,8 +530,8 @@ app.post("/items", (req, res) => {
 
 app.post("/balanceSheet", (req, res) => {
   const { startDate, endDate } = req.body;
-  console.log(req.user.id);
-  const userId = req.user.id;
+  console.log("user id is" + req.header("userId"));
+  const userId = req.header("userId");
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
@@ -552,11 +563,12 @@ app.post("/balanceSheet", (req, res) => {
 //
 app.post('/showBalance', (req, res) => {
   const { startDate, endDate } = req.body;
-  console.log(req.user.id);
-  console.log(startDate);
-  if(req.user.id){
-  const userId = req.user.id; // Accessing the user ID from req.user
+ 
 
+  console.log(startDate+endDate);
+  if(req.user.user_id){
+  const userId = req.user.user_id; // Accessing the user ID from req.user
+  console.log("user id ye hai "+ userId);
   // Query to retrieve total sum of milk and total sum of all items for morning entries
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
 
@@ -651,7 +663,7 @@ Promise.all([
 });
   }
   else{
-    res.redirect("http://localhost:3000/login");
+    res.redirect(`${process.env.URL}/login`);
   }
 });
 
@@ -663,19 +675,17 @@ app.get('/auth/google', passport.authenticate('google', {
 
 app.get("/authTrue", (req, res) => {
   console.log("Authentication process complete");
-  res.redirect("http://localhost:3000");
+  res.redirect(`${process.env.URL}`);
 });
 app.get("/auth/google/home", passport.authenticate("google", {
   successRedirect: "/authTrue",
   failureRedirect: "/login",
 }));
-
-
-passport.use("local", new LocalStrategy(async (username, password, done) => {
+passport.use('local', new LocalStrategy(async (username, password, done) => {
   try {
-    console.log(username);
-    const result = await db.query("SELECT * FROM users WHERE username = $1", [username]);
-    const user = result.rows[0]; // Access the first row
+    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
+
     if (!user) {
       return done(null, false, { message: 'Incorrect username.' });
     }
@@ -683,11 +693,13 @@ passport.use("local", new LocalStrategy(async (username, password, done) => {
     const passwordMatch = await compare(password, user.password);
 
     if (!passwordMatch) {
-      console.log(user);
       return done(null, false, { message: 'Incorrect password.' });
     }
-    console.log("user mached");
+
+    // Send the userId only, and not the whole user object
+    console.log(user.user_id);
     return done(null, user);
+
   } catch (error) {
     return done(error);
   }
@@ -735,7 +747,7 @@ app.get('/user-profile', async(req, res) => {
   // Check if user is logged in
   if (req.user) {
     // User is logged in, extract user profile from req.user
-    const profile=await db.query("select * from usersinfo where userid=$1",[req.user.id])
+    const profile=await db.query("select * from usersinfo where userid=$1",[req.user.user_id])
     const userProfile = profile.rows[0];
     
     // Send user profile data in the response
@@ -750,15 +762,30 @@ app.get('/user-profile', async(req, res) => {
 
 // Route to check session status
 app.get('/check-session', (req, res) => {
+  // Access the cookies from the request header
+  const cookies = req.headers.cookie;
+  console.log(cookies);
+  if (cookies) {
+    // Parse the cookies to find connection.sid
+    const connectionSid = cookies.split(';').find(cookie => cookie.trim().startsWith('connection.sid='));
+    if (connectionSid) {
+      console.log(`connection.sid: ${connectionSid.split('=')[1]}`);
+    }
+    else{
+      console.log("all is well");
+    }
+  }
+
+  // Check if the user is authenticated
   if (req.isAuthenticated()) {
-    res.sendStatus(200);
     console.log("hello");
+    res.sendStatus(200);
   } else {
     console.log("galat");
     res.sendStatus(401);
   }
-   // Send 200 OK status
 });
+
 app.post('/login', (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
     if (err) {
@@ -779,7 +806,8 @@ app.post('/login', (req, res, next) => {
       }
       console.log("Authentication succeeded");
       // Send success response
-      res.status(200).json({ type: user.type, message: 'Authentication succeeded' });
+
+      res.status(200).json({ type: user.type, userId: user.user_id, message: 'Authentication succeeded' });
     });
   })(req, res, next);
 });
@@ -856,7 +884,7 @@ app.post('/logout', (req, res) => {
 
 app.get('/users', async (req, res) => {
   try {
-    const results = await db.query("SELECT u.id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userId WHERE ui.userid = $1 AND u.role <> 'user';",[req.user.id]);
+    const results = await db.query("SELECT u.id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userId WHERE ui.userid = $1 AND u.role <> 'user';",[req.user.user_id]);
     res.json(results.rows); // Assuming results is an array of user data
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -866,10 +894,13 @@ app.get('/users', async (req, res) => {
 
 
 passport.serializeUser((user, done) => {
-  done(null, user); // Serialize user id into the session
+  // Serialize userId into the session
+  done(null, user); 
 });
+
 passport.deserializeUser((user, done) => {
-  done(null, user); // Serialize user id into the session
+  // Serialize userId into the session
+  done(null, user); 
 });
 
 
@@ -902,8 +933,6 @@ app.post("/ocr", async (req, res) => {
 
 
 // Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(5000, () => {
+  console.log(`Server is running on port ${5000}`);
 });
-
-
