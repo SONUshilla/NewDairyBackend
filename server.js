@@ -50,13 +50,13 @@ app.use(session({
     maxAge: 3600000 } // Set cookie options
 }));
 const corsOptions = {
-  origin: 'http://localhost:3000',//https://newdairyfrontend.onrender.com || http://localhost:3000
+  origin: 'https://newdairyfrontend.onrender.com',//https://newdairyfrontend.onrender.com || http://localhost:3000
   credentials: true,
   optionsSuccessStatus: 200,
   exposedHeaders: ["Set-Cookie"],
 };
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:3000'); // Allow requests from this origin
+  res.header('Access-Control-Allow-Origin', 'https://newdairyfrontend.onrender.com'); // Allow requests from this origin
   res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials (cookies)
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, userid'); // Include 'userid'
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allow these methods
