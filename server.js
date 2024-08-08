@@ -1,94 +1,209 @@
-import { compare } from "bcrypt";
-import express, { response } from "express";
-import env from "dotenv";
-import pg from "pg";
-import moment from "moment";
-import passport  from "passport";
+import express from 'express';
+import env from 'dotenv';
+import pg from 'pg';
+import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
-import GoogleStrategy from "passport-google-oauth2";
-import bodyParser from "body-parser";
-import session from "express-session";
+import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
+import GoogleStrategy from 'passport-google-oauth2';
+import bodyParser from 'body-parser';
 import cors from 'cors';
-import helmet from "helmet";
-import bcrypt from "bcrypt";
-import multer from "multer";
-import { createWorker } from "tesseract.js";
-import tesseract from "node-tesseract-ocr";
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import moment from "moment";
 
 const { Client } = pg;
 env.config();
 
+const app = express();
+const port = 5000;
 
-
-// Create a new PostgreSQL client instance with explicit connection parameters
+// PostgreSQL client setup
 const db = new Client({
-  user: 'postgres',
-  host: 'localhost',
-  password: 'Sonu@123',
-  database: 'DAIRY',
-  port: 5432,
-
+    user: 'postgres',
+    host: 'localhost',
+    database: 'DAIRY',
+    password: 'Sonu@123',
+    port: 5432,
 });
 
 db.connect()
-  .then(() => console.log('Connected to PostgreSQL database'))
-  .catch(err => console.error('Error connecting to PostgreSQL database', err));
+    .then(() => console.log("Connected to the database"))
+    .catch(err => console.error("Connection error", err.stack));
 
-// Configure Express app
-const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({
-  name: 'connection.sid', // Change the cookie name here
-  secret: 'your_secret_key',
-  resave: false,
-  sameSite:'lax',
-  saveUninitialized: false,
-  cookie: { secure: false,
-    httpOnly: false,
-    path: '/',
-    maxAge: 3600000 } // Set cookie options
+// Middleware setup
+app.use(cors({
+  origin: 'https://newdairyfrontend.onrender.com',
+  credentials: true, // This allows cookies and other credentials to be included in requests
 }));
-const corsOptions = {
-  origin: 'https://newdairyfrontend.onrender.com',//https://newdairyfrontend.onrender.com || http://localhost:3000
-  credentials: true,
-  optionsSuccessStatus: 200,
-  exposedHeaders: ["Set-Cookie"],
-};
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://newdairyfrontend.onrender.com'); // Allow requests from this origin
-  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials (cookies)
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, userid'); // Include 'userid'
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'); // Allow these methods
-  if (req.method === 'OPTIONS') {
-      return res.sendStatus(200); // Respond to OPTIONS requests
-  }
-  next();
-});
-app.use(cors(corsOptions));
-app.set("trust proxy", 1);
-app.use(helmet());
-app.use(bodyParser.json({ limit: "10mb" })); // Adjust the limit as needed
-// Middleware to parse JSON bodies
 app.use(express.json());
-app.use(session({
-  secret: process.env.TOP_SECRET, // Secret key used to sign the session ID cookie
-  resave: true, // Don't save session if unmodified
-  saveUninitialized: true, // Don't create session until something is stored
-  cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
-    secure: false, // Set to true if using HTTPS
-    httpOnly:false,
-  }
-}));
-console.log("for commit");
-// Middleware to parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
-app.use(passport.session());
+
+// JWT strategy setup
+const jwtOptions = {
+    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    secretOrKey: 'your_jwt_secret', // Replace with your actual secret key
+};
+
+passport.use(new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
+    try {
+        const result = await db.query('SELECT * FROM users WHERE user_id=$1', [jwt_payload.id]);
+        const user = result.rows[0];
+        if (user) {
+            return done(null, user);
+        } else {
+            return done(null, false);
+        }
+    } catch (err) {
+        return done(err, false);
+    }
+}));
+
+// Registration endpoint
+app.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await db.query('INSERT INTO users (username, password) VALUES ($1, $2)', [username, hashedPassword]);
+        res.status(201).send('User registered');
+    } catch (err) {
+        res.status(500).send('Error registering user');
+    }
+});
+
+// Login endpoint
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const result = await db.query('SELECT * FROM users WHERE username=$1', [username]);
+        const user = result.rows[0];
+        if (user && await bcrypt.compare(password, user.password)) {
+            const payload = { id: user.user_id };
+            const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
+            res.json({ token });
+        } else {
+            res.status(401).send('Invalid credentials');
+        }
+    } catch (err) {
+        res.status(500).send('Error logging in');
+    }
+});
+
+// Protected endpoint
+app.get('/check-session', passport.authenticate('jwt', { session: false }), (req, res) => {
+    res.sendStatus(200);
+});
 
 
-app.post('/entries/morning', (req, res) => {
+passport.use("google", new GoogleStrategy({
+  clientID: process.env.SECRET_CLIENT_ID,
+  clientSecret: process.env.SECRET_CLIENT_SECRET,
+  callbackURL: "http://localhost:5000/auth/google/home",
+  userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const newUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
+    if (newUser.rows.length === 0) {
+      const userIdResult = await db.query(
+        "INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING user_id",
+        [profile.email, "google", "user", null]
+      );
+      const userId = userIdResult.rows[0].id;
+      await db.query(
+        "INSERT INTO usersInfo (name, email, image, userId) VALUES ($1, $2, $3, $4)",
+        [profile.displayName, profile.email, profile.photos[0].value, userId]
+      );
+      const insertedUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
+      insertedUser.rows[0].user_id = insertedUser.rows[0].id; // Ensure user_id is accessible
+      return done(null, insertedUser.rows[0]);
+    } else {
+      newUser.rows[0].user_id = newUser.rows[0].id; // Ensure user_id is accessible
+      return done(null, newUser.rows[0]);
+    }
+  } catch (error) {
+    return done(error);
+  }
+}));
+
+app.get('/auth/google', passport.authenticate('google', {
+  scope: ['profile', 'email']
+}));
+
+app.get("/authTrue", (req, res) => {
+  console.log("Authentication process complete");
+  res.redirect(`${process.env.URL}`);
+});
+
+app.get("/auth/google/home", passport.authenticate("google", {
+  successRedirect: "/authTrue",
+  failureRedirect: "/login",
+}));
+/*
+app.post('/login', (req, res, next) => {
+  passport.authenticate('local', (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      return res.status(401).json({ message: info.message });
+    }
+    const token = jwt.sign({ user_id: user.user_id }, jwtSecret, { expiresIn: '1h' });
+    res.status(200).json({ token });
+  })(req, res, next);
+});
+
+app.post('/register', async (req, res, next) => {
+  const { username, password } = req.body;
+
+  try {
+    const existingUser = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'Username already taken' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await db.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *', [username, hashedPassword]);
+    const user = result.rows[0];
+
+    const token = jwt.sign({ user_id: user.id }, jwtSecret, { expiresIn: '1h' });
+    res.status(201).json({ message: 'User registered successfully', token });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+*/
+app.get('/user-profile', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+    const profile = await db.query("SELECT * FROM usersinfo WHERE userid = $1", [req.user.user_id]);
+    const userProfile = profile.rows[0];
+    res.status(200).json({ userProfile });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+
+
+app.post('/logout', (req, res) => {
+  // With JWT, logout is typically handled client-side by deleting the token
+  res.sendStatus(200);
+});
+
+app.get('/adminAuth', passport.authenticate('jwt', { session: false }), (req, res) => {
+  if (req.user.role === 'admin') {
+    res.status(200).json({ message: 'Admin authenticated' });
+  } else if (req.user.role === 'user' || req.user.role === 'both') {
+    res.status(205).json({ message: 'User authenticated' });
+  } else {
+    res.status(403).json({ message: 'User is not an admin' });
+  }
+});
+
+
+app.post('/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
   // Access the values submitted from the form
   const { date, weight, fat, price } = req.body;
   console.log(date);
@@ -104,7 +219,7 @@ app.post('/entries/morning', (req, res) => {
       res.status(500).send("Error inserting data");
     });
 });
-app.post('/entries/evening', (req, res) => {
+app.post('/entries/evening', passport.authenticate('jwt', { session: false }), (req, res) => {
   // Access the values submitted from the form
   const { date, weight, fat, price } = req.body;
   
@@ -122,7 +237,7 @@ app.post('/entries/evening', (req, res) => {
 });
 
 //admin
-app.post('/admin/entries/morning', (req, res) => {
+app.post('/admin/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
   // Access the values submitted from the form
   const { date, weight, fat, price ,userId} = req.body;
   console.log("admin morning");
@@ -177,7 +292,7 @@ console.log("request is here");
   }
 });
 //admin balance 
-app.post("/admin/balanceSheet", (req, res) => {
+app.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate,userId } = req.body;
   console.log(req.user.user_id);
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
@@ -209,7 +324,7 @@ app.post("/admin/balanceSheet", (req, res) => {
 
 
 //
-app.post('/admin/showBalance', (req, res) => {
+app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate,userId } = req.body;
   console.log(req.user.user_id);
 
@@ -281,13 +396,13 @@ app.post('/admin/showBalance', (req, res) => {
  
  // Assuming db.query and other necessary imports are already present
  
- app.post('/adduser', async (req, res) => {
+ app.post('/addUser', passport.authenticate('jwt', { session: false }), async (req, res) => {
    const adminUserId = req.user.user_id; // Assuming req.user.user_id contains the user ID of the admin
    const { mobileEmail, name, password } = req.body; // Assuming the request body contains mobileEmail, name, and password
  
    try {
      // Check if the role of the admin user is 'admin'
-     const adminUser = await db.query("SELECT role FROM users WHERE id = $1", [adminUserId]);
+     const adminUser = await db.query("SELECT role FROM users WHERE user_id = $1", [adminUserId]);
      if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
        return res.status(403).json({ error: 'You are not authorized to add users.' });
      }
@@ -296,8 +411,8 @@ app.post('/admin/showBalance', (req, res) => {
      const hashedPassword = await bcrypt.hash(password, saltRounds);
  
      // Insert into users table with hashed password
-     const userInsertResult = await db.query("INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
-     const userId = userInsertResult.rows[0].id;
+     const userInsertResult = await db.query("INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING user_id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
+     const userId = userInsertResult.rows[0].user_id;
  
      // Insert into usersInfo table
      await db.query("INSERT INTO usersInfo (userId, name) VALUES ($1, $2)", [userId, name]);
@@ -311,7 +426,7 @@ app.post('/admin/showBalance', (req, res) => {
  });
  
  // changing role of the user 
- app.post('/admin/associated', async (req, res) => {
+ app.post('/admin/associated', passport.authenticate('jwt', { session: false }),async (req, res) => {
   const { username, password } = req.body;
   const userId = req.user.user_id; // Assuming req.user.user_id contains the user ID
 
@@ -325,7 +440,7 @@ app.post('/admin/showBalance', (req, res) => {
     }
 
     // If username and password match, update user's role to "both"
-    await db.query("UPDATE users SET role = 'both', user_id = $1 WHERE id = $2", [user.rows[0].id, userId]);
+    await db.query("UPDATE users SET role = 'both', user_id = $1 WHERE user_id = $2", [user.rows[0].id, userId]);
     return res.status(200).json({ message: 'User login successful' });
   } catch (error) {
     console.error('Error logging in:', error);
@@ -356,8 +471,8 @@ console.log("req here");
     await db.query('BEGIN');
 
     // Insert into users table with role 'admin'
-    const userInsertResult = await db.query("INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id", [contact, hashedPassword, 'admin']);
-    const userId = userInsertResult.rows[0].id;
+    const userInsertResult = await db.query("INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING user_id", [contact, hashedPassword, 'admin']);
+    const userId = userInsertResult.rows[0].user_id;
 
     // Insert into userInfo table
     await db.query("INSERT INTO usersinfo (userId, name, dairy_number, address,mobile_number) VALUES ($1, $2, $3, $4,$5)", [userId, name, dairyNumber, address,contact]);
@@ -381,7 +496,7 @@ console.log("req here");
 const checkBothRole = async (req, res, next) => {
   try {
     // Fetch user's role from the database
-    const user = await db.query("SELECT role FROM users WHERE id = $1", [req.user.user_id]);
+    const user = await db.query("SELECT role FROM users where user_id = $1", [req.user.user_id]);
 
     // If user's role is not "both", send an error response
     if (user.rows.length === 0 || user.rows[0].role !== 'both') {
@@ -397,10 +512,10 @@ const checkBothRole = async (req, res, next) => {
 };
 
 // Route to handle both authentication
-app.get('/bothAuth', checkBothRole, async (req, res) => {
+app.get('/bothAuth',checkBothRole, passport.authenticate('jwt', { session: false }),async (req, res) => {
   try {
     // Fetch the user_id from the users table
-    const user = await db.query("SELECT user_id FROM users WHERE id = $1", [req.user.user_id]);
+    const user = await db.query("SELECT user_id FROM users where user_id = $1", [req.user.user_id]);
     const user_id = user.rows[0].user_id; // Extract user_id from the query result
 
     // If user's role is "both", send the user's ID
@@ -412,10 +527,10 @@ app.get('/bothAuth', checkBothRole, async (req, res) => {
 });
 
 
-app.post('/showEntries', async (req, res) => {
+app.post('/showEntries', passport.authenticate('jwt', { session: false }), async (req, res) => {
   const { startDate, endDate } = req.body;
   const userId = req.user.user_id; // Get user ID
-
+  console.log(req.user.user_id);
   try {
     const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
     const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
@@ -449,35 +564,10 @@ app.delete("/deleteEntry", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-// Multer configuration
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/')
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname)
-  }
-})
 
-const upload = multer({ storage: storage });
 
-const worker = createWorker();
 
-app.post('/recognize-text', upload.single('image'), async (req, res) => {
-  try {
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    const { data: { text } } = await worker.recognize(req.file.path);
-    res.send(text);
-    await worker.terminate();
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).send('Error recognizing text');
-  }
-});
-
-app.post("/addMoney", (req, res) => {
+app.get('/addMoney', passport.authenticate('jwt', { session: false }),(req, res) => {
   // Handle adding money here
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
@@ -494,7 +584,7 @@ db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)",
 });
 
 // Route to handle receiving money
-app.post("/receiveMoney", (req, res) => {
+app.get('/receiveMoney', passport.authenticate('jwt', { session: false }), (req, res) => {
   // Handle receiving money here
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
@@ -511,7 +601,7 @@ app.post("/receiveMoney", (req, res) => {
 });
 
 // Route to handle items
-app.post("/items", (req, res) => {
+app.get('/items', passport.authenticate('jwt', { session: false }),(req, res) => {
   // Handle items here
   const quantity = req.body.quantity;
   const price = req.body.price;
@@ -528,10 +618,9 @@ app.post("/items", (req, res) => {
   });
 });
 
-app.post("/balanceSheet", (req, res) => {
+app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),(req, res) => {
   const { startDate, endDate } = req.body;
-  console.log("user id is" + req.header("userId"));
-  const userId = req.header("userId");
+  const userId = req.user.user_id;
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
@@ -561,14 +650,11 @@ app.post("/balanceSheet", (req, res) => {
 
 
 //
-app.post('/showBalance', (req, res) => {
+app.post('/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate } = req.body;
- 
-
-  console.log(startDate+endDate);
+  console.log(req.user.user_id);
   if(req.user.user_id){
   const userId = req.user.user_id; // Accessing the user ID from req.user
-  console.log("user id ye hai "+ userId);
   // Query to retrieve total sum of milk and total sum of all items for morning entries
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
 
@@ -668,223 +754,9 @@ Promise.all([
 });
 
 
-app.get('/auth/google', passport.authenticate('google', {
-  scope: ['profile', 'email']
-}));
-
-
-app.get("/authTrue", (req, res) => {
-  console.log("Authentication process complete");
-  res.redirect(`${process.env.URL}`);
-});
-app.get("/auth/google/home", passport.authenticate("google", {
-  successRedirect: "/authTrue",
-  failureRedirect: "/login",
-}));
-passport.use('local', new LocalStrategy(async (username, password, done) => {
-  try {
-    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-    const user = result.rows[0];
-
-    if (!user) {
-      return done(null, false, { message: 'Incorrect username.' });
-    }
-
-    const passwordMatch = await compare(password, user.password);
-
-    if (!passwordMatch) {
-      return done(null, false, { message: 'Incorrect password.' });
-    }
-
-    // Send the userId only, and not the whole user object
-    console.log(user.user_id);
-    return done(null, user);
-
-  } catch (error) {
-    return done(error);
-  }
-}));
-
-passport.use("google", new GoogleStrategy({
-  clientID: process.env.SECRET_CLIENT_ID,
-  clientSecret: process.env.SECRET_CLIENT_SECRET,
-  callbackURL: "http://localhost:5000/auth/google/home",
-  userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
-}, async (accessToken, refreshToken, profile, done) => {
-  console.log(profile);
-  try {
-    const newUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
-    if (newUser.rows.length === 0) {
-         // Insert into users table
-         const userIdResult = await db.query(
-          "INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id",
-          [profile.email, "google", "user", null]
-        );
-        const userId = userIdResult.rows[0].id;
-      
-        // Insert into userInfo table
-        await db.query(
-          "INSERT INTO usersInfo (name, email, image, userId) VALUES ($1, $2, $3, $4)",
-          [profile.displayName, profile.email, profile.photos[0].value, userId]
-        );
-  
-   
-  
-      // Fetch the newly inserted user and pass it to done callback
-      const insertedUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
-      return done(null, insertedUser.rows[0]); // Pass the user object to done callback
-    } else {
-      return done(null, newUser.rows[0]); // Pass the user object to done callback
-    }
-  } catch (error) {
-    return done(error);
-  }
-  
-}));
- // Route to get user profile
-// Route to get user profile
-app.get('/user-profile', async(req, res) => {
-  // Check if user is logged in
-  if (req.user) {
-    // User is logged in, extract user profile from req.user
-    const profile=await db.query("select * from usersinfo where userid=$1",[req.user.user_id])
-    const userProfile = profile.rows[0];
-    
-    // Send user profile data in the response
-    res.status(200).json({ userProfile });
-  } else {
-    // User is not logged in, handle this case (redirect to login page, etc.)
-    console.log("User is not logged in");
-    res.status(401).json({ error: 'Unauthorized' });
-  }
-});
-
-
-// Route to check session status
-app.get('/check-session', (req, res) => {
-  // Access the cookies from the request header
-  const cookies = req.headers.cookie;
-  console.log(cookies);
-  if (cookies) {
-    // Parse the cookies to find connection.sid
-    const connectionSid = cookies.split(';').find(cookie => cookie.trim().startsWith('connection.sid='));
-    if (connectionSid) {
-      console.log(`connection.sid: ${connectionSid.split('=')[1]}`);
-    }
-    else{
-      console.log("all is well");
-    }
-  }
-
-  // Check if the user is authenticated
-  if (req.isAuthenticated()) {
-    console.log("hello");
-    res.sendStatus(200);
-  } else {
-    console.log("galat");
-    res.sendStatus(401);
-  }
-});
-
-app.post('/login', (req, res, next) => {
-  passport.authenticate('local', (err, user, info) => {
-    if (err) {
-      return next(err);
-    }
-    if (!user) {
-      // Authentication failed, check if it's due to incorrect username or password
-      if (info && info.message === 'Incorrect password.') {
-        return res.status(401).json({ message: 'Incorrect password.' });
-      }
-      // If not, assume incorrect username
-      return res.status(401).json({ message: 'Incorrect username.' });
-    }
-    // Authentication succeeded, log the user in
-    req.login(user, (err) => {
-      if (err) {
-        return next(err);
-      }
-      console.log("Authentication succeeded");
-      // Send success response
-
-      res.status(200).json({ type: user.type, userId: user.user_id, message: 'Authentication succeeded' });
-    });
-  })(req, res, next);
-});
-// Assuming you're using Express.js
-app.get('/adminAuth', (req, res) => {
-  // Check if the user is authenticated
-  if (!req.user) {
-    return res.status(401).json({ message: 'User not authenticated' });
-  }
-
-  // Check if the user's type is not "normal"
-  if (req.user.role == 'admin') {
-    // User is an admin, send a success response
-    return res.status(200).json({ message: 'Admin authenticated' });
-  }else if (req.user.role === 'user' || req.user.role === 'both') {
-    // User is either a user or both, send a success response
-    return res.status(205).json({ message: 'user' });
-  }else {
-    // User is not an admin, send an error response
-    return res.status(403).json({ message: 'User is not an admin' });
-  }
-});
-
-// Route to register a new user
-app.post('/register', async (req, res, next) => {
-  const { username, password } = req.body;
-
-  try {
-    // Check if username already exists in the database
-    const existingUser = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-
-    if (existingUser.rows.length > 0) {
-      // If the username already exists, send a message
-      return res.status(400).json({ message: 'Username already taken' });
-    }
-
-    // Hash the password before storing it in the database
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert the new user into the database with the hashed password
-    const result = await db.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *', [username, hashedPassword]);
-    const user = result.rows[0];
-
-    // Authenticate the user using Passport's login method
-    req.login(user, (err) => {
-      if (err) {
-        return next(err);
-      }
-      // Send a success response
-      return res.status(201).json({ message: 'User registered and authenticated successfully' });
-    });
-  } catch (error) {
-    // Log the error for debugging
-    console.error('Error registering user:', error);
-    // Send an error response
-    return res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
-
-
-app.post('/logout', (req, res) => {
-  try {
-    // Passport's logout function removes the req.user property and clears the login session (if any)
-    req.logout(() => {});
-
-    // Send a 200 OK response to indicate successful logout
-    res.sendStatus(200);
-  } catch (error) {
-    // If an error occurs during logout, handle it here
-    console.error('Error occurred during logout:', error);
-    res.status(500).send('An error occurred during logout');
-  }
-});
-
 app.get('/users', async (req, res) => {
   try {
-    const results = await db.query("SELECT u.id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userId WHERE ui.userid = $1 AND u.role <> 'user';",[req.user.user_id]);
+    const results = await db.query("SELECT u.user_id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userId WHERE ui.userid = $1 AND u.role <> 'user';",[req.user.user_id]);
     res.json(results.rows); // Assuming results is an array of user data
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -892,43 +764,6 @@ app.get('/users', async (req, res) => {
   }
 });
 
-
-passport.serializeUser((user, done) => {
-  // Serialize userId into the session
-  done(null, user); 
-});
-
-passport.deserializeUser((user, done) => {
-  // Serialize userId into the session
-  done(null, user); 
-});
-
-
-// OCR route handler
-app.post("/ocr", async (req, res) => {
-  try {
-    // Check if request contains image data
-    if (!req.body.imageData) {
-      return res.status(400).json({ error: "No image data provided" });
-    }
-
-    // Configuration for OCR
-    const config = {
-      lang: "eng",
-      oem: 1,
-      psm: 3,
-    };
-
-    // Perform OCR on the image data
-    const text = await tesseract.recognize(Buffer.from(req.body.imageData, "base64"), config);
-    
-    // Send back the recognized text
-    res.json({ text });
-  } catch (error) {
-    console.error("Error performing OCR:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
 
 
 
