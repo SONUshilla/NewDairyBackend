@@ -17,13 +17,13 @@ env.config();
 const app = express();
 const port = 5000;
 
-// PostgreSQL client setup
+const connectionString = 'postgresql://dairy_database_user:NPzyWdk0jGDiKdAsWS8RGA0fLcJBveKB@dpg-cqqdf0l6l47c73asm0c0-a.oregon-postgres.render.com:5432/DAIRY';
+
 const db = new Client({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'DAIRY',
-    password: 'Sonu@123',
-    port: 5432,
+    connectionString: connectionString,
+    ssl: {
+        rejectUnauthorized: false,  // Necessary for some managed database services; however, for production use, set up proper certificates.
+    },
 });
 
 db.connect()
@@ -32,7 +32,7 @@ db.connect()
 
 // Middleware setup
 app.use(cors({
-  origin: 'https://newdairyfrontend.onrender.com',
+  origin: 'http://localhost:3000',
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
 app.use(express.json());
