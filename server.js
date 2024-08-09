@@ -32,7 +32,7 @@ db.connect()
 
 // Middleware setup
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: 'https://newdairyfrontend.onrender.com',
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
 app.use(express.json());
