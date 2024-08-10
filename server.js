@@ -59,17 +59,6 @@ passport.use(new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
     }
 }));
 
-// Registration endpoint
-app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
-    try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await db.query('INSERT INTO users (username, password) VALUES ($1, $2)', [username, hashedPassword]);
-        res.status(201).send('User registered');
-    } catch (err) {
-        res.status(500).send('Error registering user');
-    }
-});
 
 // Login endpoint
 app.post('/login', async (req, res) => {
@@ -138,19 +127,7 @@ app.get("/auth/google/home", passport.authenticate("google", {
   successRedirect: "/authTrue",
   failureRedirect: "/login",
 }));
-/*
-app.post('/login', (req, res, next) => {
-  passport.authenticate('local', (err, user, info) => {
-    if (err) {
-      return next(err);
-    }
-    if (!user) {
-      return res.status(401).json({ message: info.message });
-    }
-    const token = jwt.sign({ user_id: user.user_id }, jwtSecret, { expiresIn: '1h' });
-    res.status(200).json({ token });
-  })(req, res, next);
-});
+
 
 app.post('/register', async (req, res, next) => {
   const { username, password } = req.body;
@@ -166,15 +143,17 @@ app.post('/register', async (req, res, next) => {
 
     const result = await db.query('INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *', [username, hashedPassword]);
     const user = result.rows[0];
-
-    const token = jwt.sign({ user_id: user.id }, jwtSecret, { expiresIn: '1h' });
+    await db.query(
+      "INSERT INTO usersInfo (name, userId) VALUES ($1, $2)",
+      [username, user.user_id]
+    );
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
     res.status(201).json({ message: 'User registered successfully', token });
   } catch (error) {
     console.error('Error registering user:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-*/
 app.get('/user-profile', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
     const profile = await db.query("SELECT * FROM usersinfo WHERE userid = $1", [req.user.user_id]);
@@ -192,15 +171,36 @@ app.post('/logout', (req, res) => {
   res.sendStatus(200);
 });
 
-app.get('/adminAuth', passport.authenticate('jwt', { session: false }), (req, res) => {
-  if (req.user.role === 'admin') {
-    res.status(200).json({ message: 'Admin authenticated' });
-  } else if (req.user.role === 'user' || req.user.role === 'both') {
-    res.status(205).json({ message: 'User authenticated' });
-  } else {
-    res.status(403).json({ message: 'User is not an admin' });
+app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+
+
+    // Query the database to get the role
+    const response = await db.query('SELECT role FROM users WHERE user_id=$1', [req.user.user_id]);
+    
+    // Ensure the response and rows are not empty
+    if (response && response.rows && response.rows.length > 0) {
+      const userRole = response.rows[0].role;
+
+      // Check the role and respond accordingly
+      if (userRole === 'admin') {
+        res.status(200).json({ message: 'Admin authenticated' });
+      } else if (userRole === 'user' || userRole === 'both') {
+        res.status(205).json({ message: 'User authenticated' });
+      } else {
+        res.status(403).json({ message: 'User is not an admin' });
+      }
+    } else {
+      // Handle the case where no user was found
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    // Handle any errors that occur during the query
+    console.error('Database query error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 
 app.post('/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
@@ -243,7 +243,7 @@ app.post('/admin/entries/morning', passport.authenticate('jwt', { session: false
   console.log("admin morning");
   const sqlDate = moment(date).format('YYYY-MM-DD');
 
-  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
+  db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("data inserting successfully");
@@ -259,7 +259,7 @@ app.post('/admin/entries/evening', (req, res) => {
   console.log("admin evening");
   const sqlDate = moment(date).format('YYYY-MM-DD');
   
-  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, req.user.user_id])
+  db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
     .then(result => {
       console.log("Data inserted successfully");
       res.status(200).send("Data inserted successfully");
@@ -294,7 +294,6 @@ console.log("request is here");
 //admin balance 
 app.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate,userId } = req.body;
-  console.log(req.user.user_id);
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
@@ -326,71 +325,78 @@ app.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false })
 //
 app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate,userId } = req.body;
-  console.log(req.user.user_id);
+  
+  if (userId) {
+    // Queries
+    const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
+    const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
+    const feedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Feed' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+    const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Money' AND user_id = $1 AND money > 0 AND date BETWEEN $2 AND $3`;
+    const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Money' AND user_id = $1 AND money < 0 AND date BETWEEN $2 AND $3`;
+    const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Ghee' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
-  // Query to retrieve total sum of milk and total sum of all items for morning entries
-  const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
+    const bBeforeStart = `SELECT SUM(money) AS totalMoney FROM borrow WHERE user_id = $1 AND date < $2`;
+    const mBeforeStart = `SELECT SUM(total) AS totalmorning FROM morning WHERE user_id = $1 AND date < $2`;
+    const eBeforeStart = `SELECT SUM(total) AS totalevening FROM evening WHERE user_id = $1 AND date < $2`;
 
-  // Query to retrieve total sum of milk and total sum of all items for evening entries
-  const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
-  const feedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Feed' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+    let results = {};
 
-  // Query to retrieve total sum of quantity and total sum of money for money entries
-  const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
-    FROM borrow 
-    WHERE item = 'Money' AND user_id = $1 AND money > 0 AND date BETWEEN $2 AND $3`;
+    // Execute all queries
+    Promise.all([
+      db.query(morningQuery, [userId, startDate, endDate]),
+      db.query(eveningQuery, [userId, startDate, endDate]),
+      db.query(feedQuery, [userId, startDate, endDate]),
+      db.query(moneyReceivedQuery, [userId, startDate, endDate]),
+      db.query(moneyGivenQuery, [userId, startDate, endDate]),
+      db.query(gheeQuery, [userId, startDate, endDate]),
+      db.query(bBeforeStart, [userId, startDate]),
+      db.query(mBeforeStart, [userId, startDate]),
+      db.query(eBeforeStart, [userId, startDate])
+    ]).then(([morningResults, eveningResults, feedResults, moneyReceivedResults, moneyGivenResults, gheeResults, bBeforeStartResults, mBeforeStartResults, eBeforeStartResults]) => {
+      // Combine results
+      results.milk = {
+        totalMilk: ((parseFloat(morningResults.rows[0].totalmilk) || 0) + (parseFloat(eveningResults.rows[0].totalmilk) || 0)),
+        total: ((parseFloat(morningResults.rows[0].total) || 0) + (parseFloat(eveningResults.rows[0].total) || 0))
+      };
 
-  // Query to retrieve total sum of quantity and total sum of money for money entries
-  const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
-    FROM borrow 
-    WHERE item = 'Money' AND user_id = $1 AND money < 0 AND date BETWEEN $2 AND $3`;
+      results.feed = {
+        totalQuantity: parseFloat(feedResults.rows[0].totalquantity) || 0,
+        totalMoney: parseFloat(feedResults.rows[0].totalmoney) || 0
+      };
+      results.moneyReceivedResults = {
+        totalQuantity: parseFloat(moneyReceivedResults.rows[0].totalquantity) || 0,
+        totalMoney: parseFloat(moneyReceivedResults.rows[0].totalmoney) || 0
+      };
+      results.moneyGivenResults = {
+        totalQuantity: parseFloat(moneyGivenResults.rows[0].totalquantity) || 0,
+        totalMoney: parseFloat(moneyGivenResults.rows[0].totalmoney) || 0
+      };
+      results.ghee = {
+        totalQuantity: parseFloat(gheeResults.rows[0].totalquantity) || 0,
+        totalMoney: parseFloat(gheeResults.rows[0].totalmoney) || 0
+      };
 
-  // Query to retrieve total sum of quantity and total sum of money for ghee entries
-  const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
-    FROM borrow 
-    WHERE item = 'Ghee' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+      const totalBeforeStart = (
+        (parseFloat(mBeforeStartResults.rows[0].totalmorning) || 0) +
+        (parseFloat(eBeforeStartResults.rows[0].totalevening) || 0) -
+        (parseFloat(bBeforeStartResults.rows[0].totalmoney) || 0)
+      );
 
-  let results = {};
+      results.Before = {
+        total: totalBeforeStart
+      };
 
-  // Execute all queries
-  Promise.all([
-    db.query(morningQuery, [userId, startDate, endDate]),
-    db.query(eveningQuery, [userId, startDate, endDate]),
-    db.query(feedQuery, [userId, startDate, endDate]),
-    db.query(moneyReceivedQuery, [userId, startDate, endDate]),
-    db.query(moneyGivenQuery, [userId, startDate, endDate]),
-    db.query(gheeQuery, [userId, startDate, endDate])
-  ]).then(([morningResults, eveningResults, feedResults, moneyReceivedResults, moneyGivenResults, gheeResults]) => {
-    // Combine results
-    results.milk = {
-      totalMilk: ((parseFloat(morningResults.rows[0].totalmilk) || 0) + (parseFloat(eveningResults.rows[0].totalmilk) || 0)),
-      total: ((parseFloat(morningResults.rows[0].total) || 0) + (parseFloat(eveningResults.rows[0].total) || 0))
-    };
-
-    results.feed = {
-      totalQuantity: parseFloat(feedResults.rows[0].totalquantity) || 0,
-      totalMoney: parseFloat(feedResults.rows[0].totalmoney) || 0
-    };
-    results.moneyReceivedResults = {
-      totalQuantity: parseFloat(moneyReceivedResults.rows[0].totalquantity) || 0,
-      totalMoney: parseFloat(moneyReceivedResults.rows[0].totalmoney) || 0
-    };
-    results.moneyGivenResults = {
-      totalQuantity: parseFloat(moneyGivenResults.rows[0].totalquantity) || 0,
-      totalMoney: parseFloat(moneyGivenResults.rows[0].totalmoney) || 0
-    };
-    results.ghee = {
-      totalQuantity: parseFloat(gheeResults.rows[0].totalquantity) || 0,
-      totalMoney: parseFloat(gheeResults.rows[0].totalmoney) || 0
-    };
-
-    // Send response with combined results
-    res.status(200).json(results);
-  }).catch(err => {
-    console.error('Error executing queries:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  });
+      // Send response with combined results
+      res.status(200).json(results);
+    }).catch(err => {
+      console.error('Error executing queries:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+  } else {
+    res.redirect(`${process.env.URL}/login`);
+  }
 });
+
  // admin add user 
  const saltRounds = 10; // Number of salt rounds for bcrypt
  
@@ -411,11 +417,11 @@ app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }),
      const hashedPassword = await bcrypt.hash(password, saltRounds);
  
      // Insert into users table with hashed password
-     const userInsertResult = await db.query("INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING user_id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
+     const userInsertResult = await db.query("INSERT INTO users (username, password, role, userId) VALUES ($1, $2, $3, $4) RETURNING user_id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
      const userId = userInsertResult.rows[0].user_id;
  
      // Insert into usersInfo table
-     await db.query("INSERT INTO usersInfo (userId, name) VALUES ($1, $2)", [userId, name]);
+     await db.query("INSERT INTO usersInfo (userid, name) VALUES ($1, $2)", [userId, name]);
  
      // Send a success response
      return res.status(200).json({ message: 'User added successfully.' });
@@ -567,7 +573,7 @@ app.delete("/deleteEntry", async (req, res) => {
 
 
 
-app.get('/addMoney', passport.authenticate('jwt', { session: false }),(req, res) => {
+app.post('/addMoney', passport.authenticate('jwt', { session: false }),(req, res) => {
   // Handle adding money here
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
@@ -601,7 +607,7 @@ app.get('/receiveMoney', passport.authenticate('jwt', { session: false }), (req,
 });
 
 // Route to handle items
-app.get('/items', passport.authenticate('jwt', { session: false }),(req, res) => {
+app.post('/items', passport.authenticate('jwt', { session: false }),(req, res) => {
   // Handle items here
   const quantity = req.body.quantity;
   const price = req.body.price;
@@ -652,7 +658,6 @@ app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),(req,
 //
 app.post('/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate } = req.body;
-  console.log(req.user.user_id);
   if(req.user.user_id){
   const userId = req.user.user_id; // Accessing the user ID from req.user
   // Query to retrieve total sum of milk and total sum of all items for morning entries
@@ -754,9 +759,9 @@ Promise.all([
 });
 
 
-app.get('/users', async (req, res) => {
+app.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const results = await db.query("SELECT u.user_id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userId WHERE ui.userid = $1 AND u.role <> 'user';",[req.user.user_id]);
+    const results = await db.query("SELECT u.user_id AS id, u.username AS username, ui.name AS name FROM users u JOIN usersInfo ui ON u.user_id = ui.userid WHERE u.userid = $1 AND u.role <> 'user';",[req.user.user_id]);
     res.json(results.rows); // Assuming results is an array of user data
   } catch (err) {
     console.error('Error fetching users:', err);
