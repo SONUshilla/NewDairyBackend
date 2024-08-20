@@ -10,6 +10,7 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import moment from "moment";
+import axios from "axios";
 
 const { Client } = pg;
 env.config();
@@ -32,7 +33,7 @@ db.connect()
 
 // Middleware setup
 app.use(cors({
-  origin: 'https://newdairyfrontend.onrender.com',
+  origin: 'http://192.168.1.10:3000',
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
 app.use(express.json());
@@ -84,35 +85,49 @@ app.get('/check-session', passport.authenticate('jwt', { session: false }), (req
 });
 
 
-passport.use("google", new GoogleStrategy({
-  clientID: process.env.SECRET_CLIENT_ID,
-  clientSecret: process.env.SECRET_CLIENT_SECRET,
-  callbackURL: "http://localhost:5000/auth/google/home",
-  userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
-}, async (accessToken, refreshToken, profile, done) => {
+app.post('/auth/google/callback', async (req, res) => {
+  const { idToken, user } = req.body;
+
   try {
-    const newUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
-    if (newUser.rows.length === 0) {
-      const userIdResult = await db.query(
-        "INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING user_id",
-        [profile.email, "google", "user", null]
-      );
-      const userId = userIdResult.rows[0].id;
-      await db.query(
-        "INSERT INTO usersInfo (name, email, image, userId) VALUES ($1, $2, $3, $4)",
-        [profile.displayName, profile.email, profile.photos[0].value, userId]
-      );
-      const insertedUser = await db.query("SELECT * FROM users WHERE username = $1", [profile.email]);
-      insertedUser.rows[0].user_id = insertedUser.rows[0].id; // Ensure user_id is accessible
-      return done(null, insertedUser.rows[0]);
-    } else {
-      newUser.rows[0].user_id = newUser.rows[0].id; // Ensure user_id is accessible
-      return done(null, newUser.rows[0]);
+    // Verify the Google ID token
+    const response = await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${idToken}`);
+    const googleData = response.data;
+
+    if (googleData.email !== user.email) {
+      return res.status(400).json({ error: 'Email mismatch' });
     }
+
+    // Check if the user already exists in your database
+    const existingUser = await db.query("SELECT * FROM users WHERE username = $1", [user.email]);
+
+    let userId;
+    if (existingUser.rows.length === 0) {
+      // Insert the new user into the users table
+      const insertUserResult = await db.query(
+        "INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING user_id",
+        [user.email, "google", "user"]
+      );
+      userId = insertUserResult.rows[0].user_id;
+
+      // Insert the user info into the usersInfo table
+      await db.query(
+        "INSERT INTO usersInfo (name, email, image, userid) VALUES ($1, $2, $3, $4)",
+        [user.name, user.email, user.picture, userId]
+      );
+    } else {
+      userId = existingUser.rows[0].user_id;
+    }
+
+    const payload = { id:userId };
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
+
+    // Return the JWT and user information to the frontend
+    res.json({token});
   } catch (error) {
-    return done(error);
+    console.error('Error during Google authentication:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
-}));
+});
 
 app.get('/auth/google', passport.authenticate('google', {
   scope: ['profile', 'email']
@@ -627,6 +642,9 @@ app.post('/items', passport.authenticate('jwt', { session: false }),(req, res) =
 app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),(req, res) => {
   const { startDate, endDate } = req.body;
   const userId = req.user.user_id;
+  console.log(userId);
+  console.log(startDate);
+  console.log(endDate);
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
@@ -643,9 +661,10 @@ app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),(req,
       results.morning=morningResults.rows[0];
       results.evening=eveningResults.rows[0];
       results.borrow = borrowResults.rows;
-      
+      console.log(results);
       // Send the results as a response
       res.status(200).json(results);
+   
     })
     .catch(error => {
       console.error('Error executing queries:', error);
@@ -773,6 +792,6 @@ app.get('/users', passport.authenticate('jwt', { session: false }), async (req, 
 
 
 // Start the server
-app.listen(5000, () => {
-  console.log(`Server is running on port ${5000}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${port}`); // Displays the IP address and port
 });
