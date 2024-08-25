@@ -21,10 +21,15 @@ const port = 5000;
 const connectionString = 'postgresql://dairy_database_user:NPzyWdk0jGDiKdAsWS8RGA0fLcJBveKB@dpg-cqqdf0l6l47c73asm0c0-a.oregon-postgres.render.com:5432/DAIRY';
 
 const db = new Client({
-    connectionString: connectionString,
+   connectionString: connectionString,
     ssl: {
-        rejectUnauthorized: false,  // Necessary for some managed database services; however, for production use, set up proper certificates.
-    },
+      rejectUnauthorized: false,  // Necessary for some managed database services; however, for production use, set up proper certificates.
+  },/*
+    database:"DAIRY",
+    user:"postgres",
+    host:"localhost",
+    password:"Sonu@123",*/
+   
 });
 
 db.connect()
@@ -33,7 +38,7 @@ db.connect()
 
 // Middleware setup
 app.use(cors({
-  origin: 'http://192.168.1.10:3000',
+  origin: process.env.ORIGIN,
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
 app.use(express.json());
@@ -308,19 +313,47 @@ console.log("request is here");
 });
 //admin balance 
 app.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false }), (req, res) => {
-  const { startDate, endDate,userId } = req.body;
+  const { startDate, endDate,userId} = req.body;
+  let borrowQuery; // Declare borrowQuery outside the conditional blocks
+if(userId=="0")
+{
+  borrowQuery = `
+  SELECT date, item, quantity, price, money, name 
+  FROM borrow 
+  WHERE userid = $1 
+    AND name IS NOT NULL 
+    AND date BETWEEN $2 AND $3 
+  ORDER BY date
+`;
+}
+else{
+  borrowQuery = `
+  SELECT date, item, quantity, price, money, name 
+  FROM borrow 
+  WHERE user_id = $1 
+    AND name IS NOT NULL 
+    AND date BETWEEN $2 AND $3 
+  ORDER BY date
+`;
+}
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
-  const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
+  console.log(userId);
 
   let results = {};
-
-  // Execute all queries
-  Promise.all([
+  const queries = [
     db.query(morningQuery, [userId, startDate, endDate]),
     db.query(eveningQuery, [userId, startDate, endDate]),
-    db.query(borrowQuery, [userId, startDate, endDate])
-  ])
+  ];
+  
+  // Conditionally add the borrowQuery based on the option
+  if (userId=="0") {
+    queries.push(db.query(borrowQuery, [req.user.user_id, startDate, endDate]));
+  } else {
+    queries.push(db.query(borrowQuery, [userId, startDate, endDate]));
+  }
+  // Execute all queries
+  Promise.all(queries)
     .then(([morningResults, eveningResults, borrowResults]) => {
       results.morning=morningResults.rows[0];
       results.evening=eveningResults.rows[0];
@@ -340,7 +373,7 @@ app.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false })
 //
 app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
   const { startDate, endDate,userId } = req.body;
-  
+  console.log(userId);
   if (userId) {
     // Queries
     const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
@@ -571,10 +604,11 @@ app.post('/showEntries', passport.authenticate('jwt', { session: false }), async
   }
 });
 
-app.delete("/deleteEntry", async (req, res) => {
-  const { itemId, time } = req.body;
+app.post("/deleteEntry", async (req, res) => {
+  const { itemId, time } = req.body.data;
+  console.log(time,itemId);
   try {
-    console.log(time,itemId);
+   
     // Execute the query with the item ID
     const result = await db.query(`DELETE FROM ${time} WHERE id = $1`, [itemId]);
     // Send a success response to the client
@@ -588,12 +622,32 @@ app.delete("/deleteEntry", async (req, res) => {
 
 
 
-app.post('/addMoney', passport.authenticate('jwt', { session: false }),(req, res) => {
+app.post('/addMoney', passport.authenticate('jwt', { session: false }),async(req, res) => {
   // Handle adding money here
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
   const date=req.body.date;
-db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,moneyAmount,req.user.user_id])
+  let name,userId1,userId2;
+  if (req.body.userId) {
+    try {
+        const nameQuery = await db.query(`SELECT name FROM usersinfo WHERE userid = $1`, [req.body.userId]);
+        name = nameQuery.rows[0]?.name;
+        userId1=req.body.userId;
+        userId2=req.user.user_id;
+    
+    } catch (error) {
+        console.error("Error executing query:", error);
+        // Handle the error appropriately, e.g., send an error response
+    }
+  }
+  else{
+    userId1=req.user.user_id;
+    userId2=null;
+  }
+
+console.log(userId1);
+console.log(userId2);
+    await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,-moneyAmount,userId1,name,userId2])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -605,12 +659,28 @@ db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)",
 });
 
 // Route to handle receiving money
-app.get('/receiveMoney', passport.authenticate('jwt', { session: false }), (req, res) => {
+app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), async (req, res) => {
   // Handle receiving money here
   const moneyAmount = req.body.moneyAmount;
   const item =req.body.selectedOption;
   const date=req.body.date;
- db.query("INSERT INTO borrow(date,item,money, user_id) VALUES ($1, $2, $3, $4)", [date,item,-moneyAmount,req.user.user_id])
+  let name,userId1,userId2;
+  if (req.body.userId) {
+    try {
+        const nameQuery = await db.query(`SELECT name FROM usersinfo WHERE userid = $1`, [req.body.userId]);
+        name = nameQuery.rows[0]?.name;
+        userId1=req.body.userId;
+         userId2=req.user.user_id;
+    } catch (error) {
+        console.error("Error executing query:", error);
+        // Handle the error appropriately, e.g., send an error response
+    }
+  }
+  else{
+     userId1=req.user.user_id;
+     userId2=null;
+  }
+ await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,moneyAmount,userId1,name,userId2])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -622,13 +692,29 @@ app.get('/receiveMoney', passport.authenticate('jwt', { session: false }), (req,
 });
 
 // Route to handle items
-app.post('/items', passport.authenticate('jwt', { session: false }),(req, res) => {
+app.post('/items', passport.authenticate('jwt', { session: false }),async (req, res) => {
   // Handle items here
   const quantity = req.body.quantity;
   const price = req.body.price;
   const item =req.body.selectedOption;
   const date=req.body.date;
-  db.query("INSERT INTO borrow(date,item,price,quantity,money, user_id) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,price, quantity,(price*quantity),req.user.user_id])
+  let name,userId1,userId2;
+  if (req.body.userId) {
+    try {
+        const nameQuery = await db.query(`SELECT name FROM usersinfo WHERE userid = $1`, [req.body.userId]);
+        name = nameQuery.rows[0]?.name;
+        userId1=req.body.userId;
+        userId2=req.user.user_id;
+    } catch (error) {
+        console.error("Error executing query:", error);
+        // Handle the error appropriately, e.g., send an error response
+    }
+  }
+  else{
+     userId1=req.user.user_id;
+     userId2=null;
+  }
+  db.query("INSERT INTO borrow(date,item,price,quantity,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6,$7,$8)", [date,item,price, quantity,(price*quantity),userId1,name,userId2])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -639,23 +725,30 @@ app.post('/items', passport.authenticate('jwt', { session: false }),(req, res) =
   });
 });
 
-app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),(req, res) => {
+app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),async (req, res) => {
   const { startDate, endDate } = req.body;
   const userId = req.user.user_id;
-  console.log(userId);
-  console.log(startDate);
-  console.log(endDate);
+  const Role= await db.query(`Select role from users where user_id=$1`,[userId]);
+  let condition;
+  console.log(Role.rows[0]);
+  if(Role.rows[0].role=="associated user")
+  {
+    condition=""
+  }
+  else{
+    condition="AND name is NULL"
+  }
+  console.log(condition);
+  const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 ` + condition + ` AND date BETWEEN $2 AND $3 ORDER BY date`;
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
-  const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date`;
-
   let results = {};
-
+console.log(userId)
   // Execute all queries
   Promise.all([
-    db.query(morningQuery, [userId, startDate, endDate]),
-    db.query(eveningQuery, [userId, startDate, endDate]),
-    db.query(borrowQuery, [userId, startDate, endDate])
+    await db.query(morningQuery, [userId, startDate, endDate]),
+    await db.query(eveningQuery, [userId, startDate, endDate]),
+    await db.query(borrowQuery, [userId, startDate, endDate])
   ])
     .then(([morningResults, eveningResults, borrowResults]) => {
       results.morning=morningResults.rows[0];
@@ -689,12 +782,12 @@ app.post('/showBalance', passport.authenticate('jwt', { session: false }), (req,
   // Query to retrieve total sum of quantity and total sum of money for money entries
   const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Money' AND user_id = $1 AND money > 0 AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
 
   // Query to retrieve total sum of quantity and total sum of money for money entries
   const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Money' AND user_id = $1 AND money < 0 AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Money Return' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
   // Query to retrieve total sum of quantity and total sum of money for ghee entries
   const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
@@ -788,7 +881,127 @@ app.get('/users', passport.authenticate('jwt', { session: false }), async (req, 
   }
 });
 
+app.post('/admin/stockCheck', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  const { startDate, endDate } = req.body;
+  if (!startDate) {
+      return res.status(400).json({ message: "Start date is required" });
+  }
+  const userId = req.user.user_id;
+  
+  try {
+    // Fetch data from the database
+    const currentUser = await db.query(`
+      SELECT
+          user_id,
+          SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
+          SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
+          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
+      FROM
+          borrow
+      WHERE
+          user_id = $1
+          AND date BETWEEN $2 AND $3
+          AND name IS NULL
+      GROUP BY
+          user_id;
+    `, [userId, startDate, endDate]);
 
+    const previousUser = await db.query(`
+      SELECT
+          user_id,
+          SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
+          SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
+          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
+      FROM
+          borrow
+      WHERE
+          user_id = $1
+          AND date < $2
+          AND name IS NULL
+      GROUP BY
+          user_id;
+    `, [userId, startDate]);
+
+    const currentCustomers = await db.query(`
+      SELECT
+          userid,
+          SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
+          SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
+          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
+      FROM
+          borrow
+      WHERE
+          userid = $1
+          AND date BETWEEN $2 AND $3
+          AND name IS NOT NULL
+      GROUP BY
+          userid;
+    `, [userId, startDate, endDate]);
+
+    const previousCustomers = await db.query(`
+      SELECT
+          userid,
+          SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
+          SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
+          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
+      FROM
+          borrow
+      WHERE
+          userid = $1
+          AND date < $2
+          AND name IS NOT NULL
+      GROUP BY
+          userid;
+    `, [userId, startDate]);
+
+    // Calculate totals
+    const totalFeedQuantity = 
+      (parseInt(currentUser.rows[0]?.total_feed_quantity) || 0) +
+      (parseInt(previousUser.rows[0]?.total_feed_quantity) || 0) -
+      (parseInt(currentCustomers.rows[0]?.total_feed_quantity) || 0) -
+      (parseInt(previousCustomers.rows[0]?.total_feed_quantity) || 0);
+
+    const totalGheeQuantity = 
+      (parseInt(currentUser.rows[0]?.total_ghee_quantity) || 0) +
+      (parseInt(previousUser.rows[0]?.total_ghee_quantity) || 0) -
+      (parseInt(currentCustomers.rows[0]?.total_ghee_quantity) || 0) -
+      (parseInt(previousCustomers.rows[0]?.total_ghee_quantity) || 0);
+
+    const totalMoney = 
+      (parseInt(currentUser.rows[0]?.total_money) || 0) +
+      (parseInt(previousUser.rows[0]?.total_money) || 0) -
+      (parseInt(currentCustomers.rows[0]?.total_money) || 0) -
+      (parseInt(previousCustomers.rows[0]?.total_money) || 0);
+
+    const totalReceiveMoney = 
+      (parseInt(currentUser.rows[0]?.total_receive_money) || 0) +
+      (parseInt(previousUser.rows[0]?.total_receive_money) || 0) -
+      (parseInt(currentCustomers.rows[0]?.total_receive_money) || 0) -
+      (parseInt(previousCustomers.rows[0]?.total_receive_money) || 0);
+
+    // Prepare the response object
+    const responseData = {
+      feedStockAvailable: totalFeedQuantity,
+      feedQuantitySold: parseFloat(currentCustomers.rows[0]?.total_feed_quantity) || 0,
+      gheeStockAvailable: totalGheeQuantity,
+      gheeQuantitySold: parseFloat(currentCustomers.rows[0]?.total_ghee_quantity) || 0,
+      moneyAvailable: totalMoney,
+      moneyGiven: parseFloat(currentCustomers.rows[0]?.total_money) || 0,
+      receiveMoneyAvailable: totalReceiveMoney,
+      moneyReceived: parseFloat(currentCustomers.rows[0]?.total_receive_money) || 0
+    };
+
+    console.log(responseData); // Debug: Check the response format
+    res.json(responseData);
+  } catch (error) {
+    console.error('Error fetching borrow data:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 
 // Start the server
