@@ -12,6 +12,8 @@ import jwt from 'jsonwebtoken';
 import moment from "moment";
 import axios from "axios";
 
+
+
 const { Client } = pg;
 env.config();
 
@@ -379,8 +381,8 @@ app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }),
     const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
     const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
     const feedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Feed' AND user_id = $1 AND date BETWEEN $2 AND $3`;
-    const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Money' AND user_id = $1 AND money > 0 AND date BETWEEN $2 AND $3`;
-    const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Money' AND user_id = $1 AND money < 0 AND date BETWEEN $2 AND $3`;
+    const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Receive Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
+    const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Give Money' AND user_id = $1 AND date BETWEEN $2 AND $3`;
     const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Ghee' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
     const bBeforeStart = `SELECT SUM(money) AS totalMoney FROM borrow WHERE user_id = $1 AND date < $2`;
@@ -634,6 +636,23 @@ app.post('/addMoney', passport.authenticate('jwt', { session: false }),async(req
         name = nameQuery.rows[0]?.name;
         userId1=req.body.userId;
         userId2=req.user.user_id;
+        if (item === "Give Money") {
+          await db.query(
+            "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
+            [date, item , -moneyAmount, req.user.user_id, `money given to ${name}`]
+          );
+          await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,"Receive Money",moneyAmount,userId1,name,userId2])
+
+        .then(result => {
+            console.log("Data inserted successfully");
+             res.status(200).send("Data inserted successfully");
+          })
+       .catch(error => {
+            console.error("Error inserting data:", error);
+            res.status(500).send("Error inserting data");
+                      });
+        } 
+        
     
     } catch (error) {
         console.error("Error executing query:", error);
@@ -643,19 +662,21 @@ app.post('/addMoney', passport.authenticate('jwt', { session: false }),async(req
   else{
     userId1=req.user.user_id;
     userId2=null;
+    await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,moneyAmount,userId1,name,userId2])
+
+        .then(result => {
+            console.log("Data inserted successfully");
+             res.status(200).send("Data inserted successfully");
+          })
+       .catch(error => {
+            console.error("Error inserting data:", error);
+            res.status(500).send("Error inserting data");
+                      });
   }
 
 console.log(userId1);
-console.log(userId2);
-    await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,-moneyAmount,userId1,name,userId2])
-  .then(result => {
-    console.log("Data inserted successfully");
-    res.status(200).send("Data inserted successfully");
-  })
-  .catch(error => {
-    console.error("Error inserting data:", error);
-    res.status(500).send("Error inserting data");
-  });
+console.log(userId2);    
+
 });
 
 // Route to handle receiving money
@@ -671,6 +692,23 @@ app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), asyn
         name = nameQuery.rows[0]?.name;
         userId1=req.body.userId;
          userId2=req.user.user_id;
+         if (item === "Receive Money") {
+          await db.query(
+            "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
+            [date, item , moneyAmount, req.user.user_id, `money received from ${name}`]
+          );
+          await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,"Receive Money",moneyAmount,userId1,name,userId2])
+
+        .then(result => {
+            console.log("Data inserted successfully");
+             res.status(200).send("Data inserted successfully");
+          })
+       .catch(error => {
+            console.error("Error inserting data:", error);
+            res.status(500).send("Error inserting data");
+                      });
+        }
+         
     } catch (error) {
         console.error("Error executing query:", error);
         // Handle the error appropriately, e.g., send an error response
@@ -679,8 +717,7 @@ app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), asyn
   else{
      userId1=req.user.user_id;
      userId2=null;
-  }
- await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,moneyAmount,userId1,name,userId2])
+     await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,item,moneyAmount,userId1,name,userId2])
   .then(result => {
     console.log("Data inserted successfully");
     res.status(200).send("Data inserted successfully");
@@ -689,6 +726,8 @@ app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), asyn
     console.error("Error inserting data:", error);
     res.status(500).send("Error inserting data");
   });
+  }
+ 
 });
 
 // Route to handle items
@@ -705,6 +744,12 @@ app.post('/items', passport.authenticate('jwt', { session: false }),async (req, 
         name = nameQuery.rows[0]?.name;
         userId1=req.body.userId;
         userId2=req.user.user_id;
+        if (item) {
+          await db.query(
+            "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
+            [date, "Receive Money",(price * quantity), req.user.user_id, `${quantity}  ${item} sold to ${name}`]
+          );
+        }
     } catch (error) {
         console.error("Error executing query:", error);
         // Handle the error appropriately, e.g., send an error response
@@ -736,10 +781,10 @@ app.post('/balanceSheet', passport.authenticate('jwt', { session: false }),async
     condition=""
   }
   else{
-    condition="AND name is NULL"
+    condition="AND userid is NULL"
   }
   console.log(condition);
-  const borrowQuery = `SELECT date, item, quantity, price, money FROM borrow WHERE user_id = $1 ` + condition + ` AND date BETWEEN $2 AND $3 ORDER BY date`;
+  const borrowQuery = `SELECT date, item, quantity, price, money,name FROM borrow WHERE user_id = $1 ` + condition + ` AND date BETWEEN $2 AND $3 ORDER BY date`;
   const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
   let results = {};
@@ -782,12 +827,12 @@ app.post('/showBalance', passport.authenticate('jwt', { session: false }), (req,
   // Query to retrieve total sum of quantity and total sum of money for money entries
   const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Receive Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
 
   // Query to retrieve total sum of quantity and total sum of money for money entries
   const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Money Return' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Give Money' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
   // Query to retrieve total sum of quantity and total sum of money for ghee entries
   const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
@@ -870,10 +915,40 @@ Promise.all([
   }
 });
 
-app.post("/singleUser", async(req,res)=>{
-  const userId=req.body.userId;
-  console.log("this is your id",userId);
-  try {
+app.post("/singleUser", passport.authenticate('jwt', { session: false }), async(req,res)=>{
+  const userId=req.body.userId || req.user.user_id;
+  if (userId === req.user.user_id) {
+    const query = `
+      SELECT 
+        u.user_id AS id, 
+        u.username AS username, 
+        ui.name AS name
+      FROM users u
+      JOIN usersInfo ui ON u.user_id = ui.userid
+      WHERE u.user_id = $1;
+    `;
+    const results = await db.query(query, [userId]);
+    const users = results.rows;
+
+    const result = {
+      ...users[0],  // Assuming you want to merge the first user object with the total value.
+      total: "--"
+    };
+
+    res.json([result]);
+  }
+  else if(userId==="0")
+  {
+    const result = {
+      name: "All customers",
+      total: "--",
+      username: ""
+    };
+    console.log(result);
+    res.json([result]);
+  } 
+  else
+  {try {
     const query = `
       SELECT 
         u.user_id AS id, 
@@ -917,12 +992,12 @@ app.post("/singleUser", async(req,res)=>{
 
     // Wait for all promises to resolve
     const usersWithTotals = await Promise.all(userTotalsPromises);
-console.log(usersWithTotals);
     res.json(usersWithTotals);
   } catch (err) {
     console.error('Error fetching users:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+}
 });
 
 app.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
@@ -970,7 +1045,6 @@ app.get('/users', passport.authenticate('jwt', { session: false }), async (req, 
 
     // Wait for all promises to resolve
     const usersWithTotals = await Promise.all(userTotalsPromises);
-console.log(usersWithTotals);
     res.json(usersWithTotals);
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -994,7 +1068,7 @@ app.post('/admin/stockCheck', passport.authenticate('jwt', { session: false }), 
           user_id,
           SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
           SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
-          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Give Money' THEN money ELSE 0 END) AS total_money,
           SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
       FROM
           borrow
@@ -1011,7 +1085,7 @@ app.post('/admin/stockCheck', passport.authenticate('jwt', { session: false }), 
           user_id,
           SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
           SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
-          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Give Money' THEN money ELSE 0 END) AS total_money,
           SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
       FROM
           borrow
@@ -1028,7 +1102,7 @@ app.post('/admin/stockCheck', passport.authenticate('jwt', { session: false }), 
           userid,
           SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
           SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
-          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Give Money' THEN money ELSE 0 END) AS total_money,
           SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
       FROM
           borrow
@@ -1045,7 +1119,7 @@ app.post('/admin/stockCheck', passport.authenticate('jwt', { session: false }), 
           userid,
           SUM(CASE WHEN item = 'Feed' THEN quantity ELSE 0 END) AS total_feed_quantity,
           SUM(CASE WHEN item = 'Ghee' THEN quantity ELSE 0 END) AS total_ghee_quantity,
-          SUM(CASE WHEN item = 'Money' THEN money ELSE 0 END) AS total_money,
+          SUM(CASE WHEN item = 'Give Money' THEN money ELSE 0 END) AS total_money,
           SUM(CASE WHEN item = 'Receive Money' THEN money ELSE 0 END) AS total_receive_money
       FROM
           borrow
