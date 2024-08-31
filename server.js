@@ -381,8 +381,8 @@ app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }),
     const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
     const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
     const feedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Feed' AND user_id = $1 AND date BETWEEN $2 AND $3`;
-    const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Receive Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
-    const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Give Money' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+    const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Receive Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
+    const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Give Money' AND user_id = $1 AND date BETWEEN $2 AND $3`;
     const gheeQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney FROM borrow WHERE item = 'Ghee' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
     const bBeforeStart = `SELECT SUM(money) AS totalMoney FROM borrow WHERE user_id = $1 AND date < $2`;
@@ -697,7 +697,7 @@ app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), asyn
             "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
             [date, item , moneyAmount, req.user.user_id, `money received from ${name}`]
           );
-          await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,"Receive Money",moneyAmount,userId1,name,userId2])
+          await db.query("INSERT INTO borrow(date,item,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6)", [date,"Give Money",moneyAmount,userId1,name,userId2])
 
         .then(result => {
             console.log("Data inserted successfully");
