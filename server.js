@@ -20,7 +20,7 @@ env.config();
 const app = express();
 const port = 5000;
 
-const connectionString = 'postgresql://dairy_database_user:NPzyWdk0jGDiKdAsWS8RGA0fLcJBveKB@dpg-cqqdf0l6l47c73asm0c0-a.oregon-postgres.render.com:5432/DAIRY';
+const connectionString = 'postgresql://dairy_database_6ki5_user:xWD7ts3s1dswt4dwSFn8khbr4OXcGTGH@dpg-crdad7jtq21c73d0bgkg-a.oregon-postgres.render.com/DAIRY';
 
 const db = new Client({
    connectionString: connectionString,
@@ -76,7 +76,7 @@ app.post('/login', async (req, res) => {
         const user = result.rows[0];
         if (user && await bcrypt.compare(password, user.password)) {
             const payload = { id: user.user_id };
-            const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
+            const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100h' }); // Replace with your actual secret key
             res.json({ token });
         } else {
             res.status(401).send('Invalid credentials');
@@ -296,8 +296,8 @@ app.post('/admin/showEntries', async (req, res) => {
   const { startDate, endDate,userId } = req.body;
 console.log("request is here");
   try {
-    const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
-    const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
+    const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date desc", [userId, startDate, endDate]);
+    const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date desc", [userId, startDate, endDate]);
     const morningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
     const eveningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
 
@@ -588,8 +588,8 @@ app.post('/showEntries', passport.authenticate('jwt', { session: false }), async
   const userId = req.user.user_id; // Get user ID
   console.log(req.user.user_id);
   try {
-    const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
-    const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
+    const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date", [userId, startDate, endDate]);
+    const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date", [userId, startDate, endDate]);
     const morningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from morning WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
     const eveningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
 
