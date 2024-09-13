@@ -43,6 +43,8 @@ app.use(cors({
   origin: process.env.ORIGIN,
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
@@ -686,6 +688,7 @@ app.post('/receiveMoney', passport.authenticate('jwt', { session: false }), asyn
   const item =req.body.selectedOption;
   const date=req.body.date;
   let name,userId1,userId2;
+  console.log("req came here");
   if (req.body.userId) {
     try {
         const nameQuery = await db.query(`SELECT name FROM usersinfo WHERE userid = $1`, [req.body.userId]);
