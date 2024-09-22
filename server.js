@@ -433,7 +433,7 @@ app.post('/admin/showBalance', passport.authenticate('jwt', { session: false }),
         (parseFloat(eBeforeStartResults.rows[0].totalevening) || 0) -
         (parseFloat(bBeforeStartResults.rows[0].totalmoney) || 0)
       );
-
+      console.log("totalBeforeStart" + totalBeforeStart);
       results.Before = {
         total: totalBeforeStart
       };
@@ -599,7 +599,6 @@ app.post('/showEntries', passport.authenticate('jwt', { session: false }), async
     const eveningEntries = eveningData.rows;
     const morningTotal = morningSum.rows[0];
     const eveningTotal = eveningSum.rows[0];
-    console.log(morningEntries);
     res.send({ morningEntries, eveningEntries, morningTotal, eveningTotal });
   } catch (error) {
     // Handle error
@@ -842,14 +841,16 @@ app.post('/showBalance', passport.authenticate('jwt', { session: false }), (req,
     FROM borrow 
     WHERE item = 'Ghee' AND user_id = $1 AND date BETWEEN $2 AND $3`;
 
-    const bBeforeStart = `SELECT SUM(money) AS totalMoney 
-        FROM borrow 
-        WHERE user_id = $1  AND date < $2`;
+    const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Give Money' THEN money WHEN item IN ('Receive Money', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
+    FROM borrow 
+    WHERE user_id = $1 
+    AND date < $2`;
+
     // Query to retrieve total sum of price from morning entries before the start date
   const mBeforeStart = "select sum(total) as totalmorning from morning where user_id=$1 and date < $2";
 
    // Query to retrieve total sum of price from evening entries before the start date
-  const eBeforeStart = "select sum(total) as totalevening from morning   where user_id=$1 and date < $2";
+  const eBeforeStart = "select sum(total) as totalevening from evening   where user_id=$1 and date < $2";
 
   let results = {};
 
@@ -889,22 +890,23 @@ Promise.all([
     totalMoney: parseFloat(gheeResults.rows[0].totalmoney) || 0
   };
 
-  console.log(bBeforeStartResults.rows[0]); // Check the structure of the result
-  console.log(mBeforeStartResults.rows[0]);
-  console.log(eBeforeStartResults.rows[0]);
-
   const totalBeforeStart = (
-    parseFloat(mBeforeStartResults.rows[0].totalmorning) || 0 +
-    parseFloat(eBeforeStartResults.rows[0].totalevening) || 0 -
-    parseFloat(bBeforeStartResults.rows[0].totalmoney)   || 0 
+    (parseFloat(mBeforeStartResults.rows[0].totalmorning) || 0) + 
+    (parseFloat(eBeforeStartResults.rows[0].totalevening) || 0) +
+    (parseFloat(bBeforeStartResults.rows[0].totalmoney) || 0)
   );
-
+  
+  console.log(mBeforeStartResults.rows[0].totalmorning);
+  console.log(eBeforeStartResults.rows[0].totalevening);
+  console.log(bBeforeStartResults.rows[0].totalmoney);
   console.log(totalBeforeStart);
-
+  
   // Add the total before start date to results.Before object
   results.Before = {
     total: totalBeforeStart
   };
+  console.log("totalBeforeStart" + totalBeforeStart);
+
 
   // Send response with combined results
   res.status(200).json(results);
