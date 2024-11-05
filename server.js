@@ -20,7 +20,7 @@ env.config();
 const app = express();
 const port = 5000;
 
-const connectionString = 'postgresql://dairy_database_6ki5_user:xWD7ts3s1dswt4dwSFn8khbr4OXcGTGH@dpg-crdad7jtq21c73d0bgkg-a.oregon-postgres.render.com/DAIRY';
+const connectionString = 'postgresql://dairy_database_gmj4_user:1JJ2aKl4TFFrKzx40fKbiCfmfb5S0ltn@dpg-cskvv62j1k6c73bol810-a.oregon-postgres.render.com/dairy_database_gmj4';
 
 const db = new Client({
    connectionString: connectionString,
