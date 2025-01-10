@@ -1,0 +1,57 @@
+import db from "../db/db.js";
+
+
+// Function to find user by username
+export const findUserByUsername = async (username) => {
+    const result = await db.query('SELECT * FROM users WHERE username=$1', [username]);
+    return result.rows[0];
+};
+
+// Function to create a new user
+export const createUser = async (username, hashedPassword, role = 'user') => {
+    const result = await db.query(
+        'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING *',
+        [username, hashedPassword, role]
+    );
+    return result.rows[0];
+};
+
+// Function to check if a user exists by email
+export const findUserByEmail = async (email) => {
+    const result = await db.query("SELECT * FROM users WHERE username = $1", [email]);
+    return result.rows[0];
+};
+
+export const insertGoogleUserInfo = async (name, email, image, userId) => {
+    const query = `
+      INSERT INTO usersInfo (name, email, image, userid) 
+      VALUES ($1, $2, $3, $4)
+    `;
+    const values = [name, email, image, userId];
+    return db.query(query, values);
+  };
+  
+  // Function to insert user info for manual registration
+  export const insertManualUserInfo = async (name, userId) => {
+    const query = `
+      INSERT INTO usersInfo (name, userid) 
+      VALUES ($1, $2)
+    `;
+    const values = [name, userId];
+    return db.query(query, values);
+  };
+
+// Function to retrieve user details by ID
+export const findUserById = async (id) => {
+    const result = await db.query('SELECT * FROM users WHERE id=$1', [id]);
+    return result.rows[0];
+};
+export const findUserRole = async (id) => {
+  const result = await db.query('SELECT role FROM users WHERE id=$1', [id]);
+  return result.rows[0];
+};
+export const getUserName = async (id) => {
+  const result = await db.query('SELECT name FROM usersinfo WHERE userid=$1', [id]);
+  return result.rows[0].name || " ";
+};
+

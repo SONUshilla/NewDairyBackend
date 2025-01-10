@@ -1,0 +1,40 @@
+import db from "../db/db.js";
+
+
+const createEveningEntries = async (date, weight, fat, price, user_id) => {
+  const total = weight * price;
+     await db.query("INSERT INTO evening (date, weight, fat, price, total, user_id) VALUES ($1, $2, $3, $4, $5, $6)",
+        [date, weight, fat, price, total, user_id]);
+         return true; // Acknowledge success
+
+  };
+  
+
+const getEveningEntriesByDate=async (userId,startDate,endDate)=>{
+    const result = await db.query(
+        "SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date",[userId,startDate,endDate]);
+        return result.rows;
+}
+const getSumOfEveningEntriesByDate= async(userId,startDate,endDate)=>{
+  const eveningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
+  return eveningSum.rows[0];
+}
+
+// Get evening entry totals before the start date
+const getEveningTotalsBeforeStart = async (userId, startDate) => {
+    // Query to retrieve total sum of price from evening entries before the start date
+    const eBeforeStart = "select sum(total) as totalevening from evening   where user_id=$1 and date < $2";
+  const result = await db.query(eBeforeStart, [userId, startDate]);
+  return result.rows[0]; 
+};
+const getEveningSumOfTotalAfterDate= async(userId,startDate)=>{
+
+}
+
+export {
+    createEveningEntries,
+    getEveningEntriesByDate,
+    getEveningSumOfTotalAfterDate,
+    getEveningTotalsBeforeStart,
+    getSumOfEveningEntriesByDate
+}
