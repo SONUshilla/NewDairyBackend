@@ -14,6 +14,7 @@ import transactionController from "./Controllers/transactionController.js";
 import moment from "moment";
 import axios from "axios";
 import db from "./db/db.js";
+import bcrypt from "bcrypt";
 
 
 
@@ -103,12 +104,12 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
  // Assuming db.query and other necessary imports are already present
  
  app.post('/addUser', passport.authenticate('jwt', { session: false }), async (req, res) => {
-   const adminUserId = req.user.user_id; // Assuming req.user.user_id contains the user ID of the admin
+   const adminUserId = req.user.id; // Assuming req.user.user_id contains the user ID of the admin
    const { mobileEmail, name, password } = req.body; // Assuming the request body contains mobileEmail, name, and password
  
    try {
      // Check if the role of the admin user is 'admin'
-     const adminUser = await db.query("SELECT role FROM users WHERE user_id = $1", [adminUserId]);
+     const adminUser = await db.query("SELECT role FROM users WHERE id = $1", [adminUserId]);
      if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
        return res.status(403).json({ error: 'You are not authorized to add users.' });
      }
@@ -117,8 +118,8 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
      const hashedPassword = await bcrypt.hash(password, saltRounds);
  
      // Insert into users table with hashed password
-     const userInsertResult = await db.query("INSERT INTO users (username, password, role, userId) VALUES ($1, $2, $3, $4) RETURNING user_id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
-     const userId = userInsertResult.rows[0].user_id;
+     const userInsertResult = await db.query("INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
+     const userId = userInsertResult.rows[0].id;
  
      // Insert into usersInfo table
      await db.query("INSERT INTO usersInfo (userid, name) VALUES ($1, $2)", [userId, name]);
@@ -134,7 +135,7 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
  // changing role of the user 
  app.post('/admin/associated', passport.authenticate('jwt', { session: false }),async (req, res) => {
   const { username, password } = req.body;
-  const userId = req.user.user_id; // Assuming req.user.user_id contains the user ID
+  const userId = req.user.id; // Assuming req.user.user_id contains the user ID
 
   try {
     // Fetch user from the database by username
@@ -373,14 +374,14 @@ app.get('/users', passport.authenticate('jwt', { session: false }), async (req, 
   try {
     const query = `
       SELECT 
-        u.user_id AS id, 
+        u.id AS id, 
         u.username AS username, 
         ui.name AS name
       FROM users u
-      JOIN usersInfo ui ON u.user_id = ui.userid
-      WHERE u.role = 'associated user';  -- Adjust as needed
+      JOIN usersInfo ui ON u.id = ui.userid
+      WHERE u.user_id=$1;  -- Adjust as needed
     `;
-    const results = await db.query(query);
+    const results = await db.query(query,[req.user.id]);
     const users = results.rows;
 
     // Step 2: Calculate additional totals for each user

@@ -84,7 +84,6 @@ router.post('/showBalance', passport.authenticate('jwt', { session: false }), (r
     const userId = req.user.id;
     const Role=findUserRole(userId);
     let results = {};
-    console.log("requests are coming here");
     // Execute all queries
     Promise.all([
      getSumOfMorningEntriesByDate(userId, startDate, endDate),

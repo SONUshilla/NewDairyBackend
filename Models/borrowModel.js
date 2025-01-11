@@ -72,22 +72,24 @@ export const getBorrowBeforeStart = async (userId, startDate) => {
   return result.rows[0]; 
 };
 
-const insertGiveMoneyEntry = async (date, item, moneyAmount, adminId, name,userId) => {
+const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,receiverId=null) => {
     try {
+
+      console.log("1234")
       await db.query(
-        "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
-        [date, item, -moneyAmount, adminId, name]
+        "INSERT INTO borrow(date, item, money, user_id, name,userid) VALUES ($1, $2, $3, $4, $5,$6)",
+        [date, item, -moneyAmount, senderId, name,receiverId]
       );
     } catch (error) {
       console.error("Error inserting 'Give Money' entry:", error);      throw error; // Let the caller handle the error
     }
   };
 
-  const insertReceiveMoneyEntry = async (date, item, moneyAmount, adminId, name,userId) => {
+  const insertReceiveMoneyEntry = async (date, item, moneyAmount, receiverId, name,senderId=null) => {
     try {
       await db.query(
         "INSERT INTO borrow(date, item, money, user_id, name, userid) VALUES ($1, $2, $3, $4, $5, $6)",
-        [date, item, moneyAmount, userId, name, adminId]
+        [date, item, moneyAmount, receiverId, name, senderId]
       );
     } catch (error) {
       console.error("Error inserting 'Receive Money' entry:", error);

@@ -83,7 +83,7 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
     borrowQuery = `
     SELECT date, item, quantity, price, money, name 
     FROM borrow 
-    WHERE userid = $1 
+    WHERE user_id = $1 
       AND name IS NOT NULL 
       AND date BETWEEN $2 AND $3 
   `;
