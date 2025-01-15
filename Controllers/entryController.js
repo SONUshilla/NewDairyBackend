@@ -1,6 +1,7 @@
 import express from "express";
 import passport from "passport";
 import moment from "moment";
+import db from "../db/db.js";
 import {createMorningEntries,getMorningEntriesByDate,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
 import {createEveningEntries,getEveningEntriesByDate,getSumOfEveningEntriesByDate} from "../Models/eveningModel.js";
 
@@ -36,6 +37,8 @@ router.post('/entries/morning', passport.authenticate('jwt', { session: false })
 router.post('/showEntries', passport.authenticate('jwt', { session: false }), async (req, res) => {
     const { startDate, endDate } = req.body;
     const userId = req.user.id; // Get user ID
+    console.log(startDate,endDate);
+    console.log("one time");
     try {
       
       const morningEntries = await getMorningEntriesByDate(userId,startDate,endDate);

@@ -28,14 +28,13 @@ router.post('/showBalance', passport.authenticate('jwt', { session: false }), (r
     getEveningTotalsBeforeStart(userId,startDate),
 
   ]).then(([morningResults, eveningResults, feedResults, moneyReceivedResults, moneyGivenResults, gheeResults, bBeforeStartResults, mBeforeStartResults, eBeforeStartResults]) => {
-  console.log(moneyGivenResults,moneyReceivedResults);
     results.milk = {
       totalMilk:
-        (parseFloat(morningResults.totalweight) || 0) +
-        (parseFloat(eveningResults.totalweight) || 0),
+        (parseFloat(morningResults.weight) || 0) +
+        (parseFloat(eveningResults.weight) || 0),
       total:
-        (parseFloat(morningResults.totalmoney) || 0) +
-        (parseFloat(eveningResults.totalmoney) || 0),
+        (parseFloat(morningResults.total) || 0) +
+        (parseFloat(eveningResults.total) || 0),
     };
 
     results.feed = {
@@ -67,7 +66,6 @@ router.post('/showBalance', passport.authenticate('jwt', { session: false }), (r
     results.Before = {
       total: totalBeforeStart
     };
-    console.log(results);
     res.status(200).json(results);
   }).catch(err => {
     console.error('Error executing queries:', err);

@@ -370,57 +370,7 @@ app.post("/singleUser", passport.authenticate('jwt', { session: false }), async(
 }
 });
 
-app.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
-  try {
-    const query = `
-      SELECT 
-        u.id AS id, 
-        u.username AS username, 
-        ui.name AS name
-      FROM users u
-      JOIN usersInfo ui ON u.id = ui.userid
-      WHERE u.user_id=$1;  -- Adjust as needed
-    `;
-    const results = await db.query(query,[req.user.id]);
-    const users = results.rows;
 
-    // Step 2: Calculate additional totals for each user
-    const userTotalsPromises = users.map(async (user) => {
-      // Fetch milk and borrow totals for the current user
-      const milkResult = await db.query(
-        `SELECT COALESCE(SUM(m.total), 0) + COALESCE(SUM(e.total), 0) AS total
-         FROM morning m
-         LEFT JOIN evening e ON m.user_id = e.user_id
-         WHERE m.user_id = $1 OR e.user_id = $2;`,
-        [user.id, user.id]
-      );
-
-      const borrowResult = await db.query(
-        `SELECT COALESCE(SUM(money), 0) AS money
-         FROM borrow
-         WHERE user_id = $1;`,
-        [user.id]
-      );
-
-      // Combine the results
-      const milkTotal = parseFloat(milkResult.rows[0].total) || 0;
-      const borrowTotal = parseFloat(borrowResult.rows[0].money) || 0;
-      const total = milkTotal + borrowTotal;
-
-      return {
-        ...user,
-        total
-      };
-    });
-
-    // Wait for all promises to resolve
-    const usersWithTotals = await Promise.all(userTotalsPromises);
-    res.json(usersWithTotals);
-  } catch (err) {
-    console.error('Error fetching users:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 
 

@@ -55,3 +55,17 @@ export const getUserName = async (id) => {
   return result.rows[0].name || " ";
 };
 
+export const getUsersInfo = async (parentUserId) => {
+  const query = `
+    SELECT 
+      u.id AS id, 
+      u.username AS username, 
+      ui.name AS name
+    FROM users u
+    JOIN usersInfo ui ON u.id = ui.userid
+    WHERE u.user_id = $1; -- Adjust as needed
+  `;
+  const result = await db.query(query, [parentUserId]);
+  return result.rows;
+};
+

@@ -2,9 +2,10 @@ import db from "../db/db.js";
 import express from 'express';
 import passport from 'passport';
 import moment from "moment";
-import {getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
+import {getMilkTotalForUser, getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
 import {getEveningTotalsBeforeStart,getSumOfEveningEntriesByDate} from "../Models/eveningModel.js";
-import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries} from "../Models/borrowModel.js";
+import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries, getBorrowTotalForUser} from "../Models/borrowModel.js";
+import { getUsersInfo } from "../Models/userModel.js";
 
 
 const router = express.Router();
@@ -313,6 +314,31 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
     } catch (error) {
       console.error('Error fetching borrow data:', error);
       res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+router.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
+    try {
+      const users = await getUsersInfo(req.user.id);
+      // Step 2: Calculate additional totals for each user
+      const userTotalsPromises = users.map(async (user) => {  
+        // Combine the results
+        const milkTotal = await getMilkTotalForUser(user.id) ;
+        const borrowTotal = await  getBorrowTotalForUser(user.id);
+        const total = milkTotal + borrowTotal;
+  
+        return {
+          ...user,
+          total
+        };
+      });
+  
+      // Wait for all promises to resolve
+      const usersWithTotals = await Promise.all(userTotalsPromises);
+      res.json(usersWithTotals);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
   

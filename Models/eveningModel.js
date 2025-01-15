@@ -16,7 +16,7 @@ const getEveningEntriesByDate=async (userId,startDate,endDate)=>{
         return result.rows;
 }
 const getSumOfEveningEntriesByDate= async(userId,startDate,endDate)=>{
-  const eveningSum = await db.query("SELECT SUM(weight) AS totalWeight, COUNT(date) AS totalDate, SUM(total) AS totalMoney from evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
+  const eveningSum = await db.query("SELECT SUM(weight) AS Weight, COUNT(date) AS Date, SUM(total) AS total from evening WHERE user_id = $1 AND date BETWEEN $2 AND $3", [userId, startDate, endDate]);
   return eveningSum.rows[0];
 }
 

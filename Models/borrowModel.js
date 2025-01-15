@@ -7,7 +7,7 @@ export const getBorrowEntries = async (userId, startDate, endDate, isAssociatedU
   
       // Construct the query with the condition
       const borrowQuery = `
-        SELECT date, item, quantity, price, money, name
+        SELECT id, date, item, quantity, price, money, name
         FROM borrow
         WHERE user_id = $1 AND date BETWEEN $2 AND $3
         ORDER BY date
@@ -96,9 +96,20 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
       throw error; // Let the caller handle the error
     }
   };
+
+  const getBorrowTotalForUser = async (userId) => {
+    const query = `
+      SELECT COALESCE(SUM(money), 0) AS money
+      FROM borrow
+      WHERE user_id = $1;
+    `;
+    const result = await db.query(query, [userId]);
+    return parseFloat(result.rows[0].money) || 0;
+  };
   
   export { insertGiveMoneyEntry,
-    insertReceiveMoneyEntry
+    insertReceiveMoneyEntry,
+    getBorrowTotalForUser
    };
 
 
