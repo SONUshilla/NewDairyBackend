@@ -10,6 +10,7 @@ const router = express.Router();
 router.post('/entries/morning', passport.authenticate('jwt', { session: false }), async (req, res) => {
     // Access the values submitted from the form
     const { date, weight, fat, price } = req.body;  
+    
     try{
          await createMorningEntries(date,weight,fat,price,req.user.id);
          res.status(200).send("Morning entry created successfully.");
