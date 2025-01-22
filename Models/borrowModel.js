@@ -38,7 +38,7 @@ export const getFeedTotals = async (userId, startDate, endDate) => {
 export const getMoneyReceivedTotals = async (userId, startDate, endDate) => {
     const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Receive Money' AND user_id = $1  AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Money Recieved' AND user_id = $1  AND date BETWEEN $2 AND $3`;
 
   const result = await db.query(moneyReceivedQuery, [userId, startDate, endDate]);
   return result.rows[0];
@@ -48,7 +48,7 @@ export const getMoneyReceivedTotals = async (userId, startDate, endDate) => {
 export const getMoneyGivenTotals = async (userId, startDate, endDate) => {
     const moneyGivenQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Give Money' AND user_id = $1 AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Money Given' AND user_id = $1 AND date BETWEEN $2 AND $3`;
   const result = await db.query(moneyGivenQuery, [userId, startDate, endDate]);
   return result.rows[0];
 };
@@ -64,7 +64,7 @@ export const getGheeTotals = async (userId, startDate, endDate) => {
 
 // Get balances from borrow table before the start date
 export const getBorrowBeforeStart = async (userId, startDate) => {
-    const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Give Money' THEN money WHEN item IN ('Receive Money', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
+    const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Money Given' THEN money WHEN item IN ('Money Recieved', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
     FROM borrow 
     WHERE user_id = $1 
     AND date < $2`;
@@ -81,7 +81,7 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
         [date, item, -moneyAmount, senderId, name,receiverId]
       );
     } catch (error) {
-      console.error("Error inserting 'Give Money' entry:", error);      throw error; // Let the caller handle the error
+      console.error("Error inserting 'Money Given' entry:", error);      throw error; // Let the caller handle the error
     }
   };
 
@@ -92,7 +92,7 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
         [date, item, moneyAmount, receiverId, name, senderId]
       );
     } catch (error) {
-      console.error("Error inserting 'Receive Money' entry:", error);
+      console.error("Error inserting 'Money Recieved' entry:", error);
       throw error; // Let the caller handle the error
     }
   };

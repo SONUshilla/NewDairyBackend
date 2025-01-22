@@ -18,9 +18,9 @@ router.post('/addMoney', passport.authenticate('jwt', { session: false }),async(
         const name = await getUserName( req.body.userId);
         userId=req.body.userId;
         adminId=req.user.id;
-        if (item === "Give Money") {
-          await insertGiveMoneyEntry(date,item,moneyAmount,adminId,`money given to ${name}`,null),
-          await insertReceiveMoneyEntry(date,"Receive Money",moneyAmount,userId,"Money recieved from dairy",adminId) 
+        if (item === "Money Given") {
+          await insertGiveMoneyEntry(date,item,moneyAmount,adminId,`${name}`,null),
+          await insertReceiveMoneyEntry(date,"Money Received",moneyAmount,userId,"",adminId) 
         .then(result => {
             console.log("Data inserted successfully");
              res.status(200).send("Data inserted successfully");
@@ -68,9 +68,9 @@ router.post('/receiveMoney', passport.authenticate('jwt', { session: false }), a
         name = await getUserName(req.body.userId);
         userId1=req.body.userId;
          userId2=req.user.id;
-         if (item === "Receive Money") {
-          await insertReceiveMoneyEntry(date,item,moneyAmount,userId2,`money received from ${name}`),
-          await insertGiveMoneyEntry(date,"Give Money",moneyAmount,userId1,"Money given to Dairy",userId2)
+         if (item === "Money Received") {
+          await insertReceiveMoneyEntry(date,item,moneyAmount,userId2,` ${name}`),
+          await insertGiveMoneyEntry(date,"Money Given",moneyAmount,userId1,"",userId2)
         .then(result => {
             console.log("Data inserted successfully");
              res.status(200).send("Data inserted successfully");
