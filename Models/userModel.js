@@ -13,6 +13,7 @@ export const createUser = async (username, hashedPassword, role = 'user') => {
         'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING *',
         [username, hashedPassword, role]
     );
+
     return result.rows[0];
 };
 

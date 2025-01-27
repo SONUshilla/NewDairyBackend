@@ -15,7 +15,6 @@ export const getBorrowEntries = async (userId, startDate, endDate, isAssociatedU
   
       // Execute the query with parameterized values
       const results = await db.query(borrowQuery, [userId, startDate, endDate]);
-  
       // Return rows from the results
       return results.rows;
     } catch (error) {

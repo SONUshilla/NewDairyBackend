@@ -14,7 +14,6 @@ const router = express.Router();
 router.post('/admin/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
     // Access the values submitted from the form
     const { date, weight, fat, price ,userId} = req.body;
-    console.log("admin morning");
     const sqlDate = moment(date).format('YYYY-MM-DD');
   
     db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
@@ -30,7 +29,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   router.post('/admin/entries/evening', (req, res) => {
     // Access the values submitted from the form
     const { date, weight, fat, price ,userId} = req.body;
-    console.log("admin evening");
     const sqlDate = moment(date).format('YYYY-MM-DD');
     
     db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
@@ -46,7 +44,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   
   router.post('/admin/showEntries', async (req, res) => {
     const { startDate, endDate,userId } = req.body;
-  console.log("request is here");
     try {
       const morningData = await db.query("SELECT * FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date desc", [userId, startDate, endDate]);
       const eveningData = await db.query("SELECT * FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3 order by date desc", [userId, startDate, endDate]);
@@ -69,11 +66,10 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   router.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false }), (req, res) => {
     const { startDate, endDate,userId} = req.body;
     let borrowQuery; // Declare borrowQuery outside the conditional blocks
-    console.log("thio is id"+userId);
   if(userId=="0")
   {
     borrowQuery = `
-    SELECT date, item, quantity, price, money, name 
+    SELECT id,date, item, quantity, price, money, name 
     FROM borrow 
     WHERE user_id = $1 
       AND name IS NOT NULL 
@@ -82,7 +78,7 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   }
   else{
     borrowQuery = `
-    SELECT date, item, quantity, price, money, name 
+    SELECT id,date, item, quantity, price, money, name 
     FROM borrow 
     WHERE user_id = $1 
       AND name IS NOT NULL 
@@ -112,7 +108,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         results.morning=morningResults.rows[0];
         results.evening=eveningResults.rows[0];
         results.borrow = borrowResults.rows;
-        console.log(results.borrow);
         
         // Send the results as a response
         res.status(200).json(results);
@@ -128,7 +123,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   //
   router.post('/admin/showBalance', passport.authenticate('jwt', { session: false }), (req, res) => {
     const { startDate, endDate,userId } = req.body;
-    console.log(userId);
     if (userId) {
       let results = {};
   
@@ -145,7 +139,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         getEveningTotalsBeforeStart(userId,startDate),
     
       ]).then(([morningResults, eveningResults, feedResults, moneyReceivedResults, moneyGivenResults, gheeResults, bBeforeStartResults, mBeforeStartResults, eBeforeStartResults]) => {
-      console.log(moneyGivenResults,moneyReceivedResults);
         results.milk = {
           totalMilk:
             (parseFloat(morningResults.totalweight) || 0) +
@@ -184,7 +177,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         results.Before = {
           total: totalBeforeStart
         };
-        console.log(results);
         res.status(200).json(results);
       }).catch(err => {
         console.error('Error executing queries:', err);
@@ -309,7 +301,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         moneyReceived: parseFloat(currentCustomers.rows[0]?.total_receive_money) || 0
       };
   
-      console.log(responseData); // Debug: Check the response format
       res.json(responseData);
     } catch (error) {
       console.error('Error fetching borrow data:', error);

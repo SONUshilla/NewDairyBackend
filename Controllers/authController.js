@@ -61,7 +61,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/auth/google/callback', async (req, res) => {
-    const { idToken, user } = req.body;
+    const { idToken, user,role} = req.body;
  
     try {
       // Verify the Google ID token
@@ -78,8 +78,8 @@ router.post('/auth/google/callback', async (req, res) => {
       let userId;
       if (!existingUser) {
         // Insert the new user into the users table
-        const insertUserResult = createUser(user.email, "google", "user");
-        userId = insertUserResult.rows[0].id;
+        const insertUserResult = await createUser(user.email, "google", role);
+        userId = insertUserResult.id;
         // Insert the user info into the usersInfo table
       await insertGoogleUserInfo(user.name, user.email, user.picture, userId);
       } else {
@@ -87,7 +87,6 @@ router.post('/auth/google/callback', async (req, res) => {
       }
   
       const payload = { id:userId };
-      console.log(payload);
       const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
       console.log(token);
       // Return the JWT and user information to the frontend
@@ -114,20 +113,20 @@ router.post('/auth/google/callback', async (req, res) => {
   
   
   router.post('/register', async (req, res, next) => {
-    const { username, password } = req.body;
-  
+    const { name,username, password ,role} = req.body;
+  {console.log(name,username,password)}
     try {
       const existingUser = findUserByUsername(username);
   
-      if (existingUser.rows.length > 0) {
+      if (existingUser.length > 0) {
         return res.status(400).json({ message: 'Username already taken' });
       }
   
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      const user = createUser(username, hashedPassword,"user");
-      insertManualUserInfo(username, user.user_id);
-      console.log("req came here");
+      const user = await createUser(username, hashedPassword,role);
+      insertManualUserInfo(name, user.id);
+      const payload = { id:user.id };
       const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
       res.status(201).json({ message: 'User registered successfully', token });
     } catch (error) {
