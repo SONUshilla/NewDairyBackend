@@ -15,6 +15,7 @@ import moment from "moment";
 import axios from "axios";
 import db from "./db/db.js";
 import bcrypt from "bcrypt";
+import { insertBorrowEntry } from './Models/borrowModel.js';
 
 
 
@@ -248,37 +249,29 @@ app.post('/items', passport.authenticate('jwt', { session: false }),async (req, 
   const price = req.body.price;
   const item =req.body.selectedOption;
   const date=req.body.date;
-  let name,userId1,userId2;
-  if (req.body.userId) {
-    try {
+  const userId1=req.body.userId || null;
+ const userId2=req.user.id;
+ try { if (req.body.userId) {
+    
         const nameQuery = await db.query(`SELECT name FROM usersinfo WHERE userid = $1`, [req.body.userId]);
-        name = nameQuery.rows[0]?.name;
-        userId1=req.body.userId;
-        userId2=req.user.user_id;
+        const name = nameQuery.rows[0]?.name;
+   
         if (item) {
-          await db.query(
-            "INSERT INTO borrow(date, item, money, user_id, name) VALUES ($1, $2, $3, $4, $5)",
-            [date, "Receive Money",(price * quantity), req.user.user_id, `${quantity}  ${item} sold to ${name}`]
-          );
+          await insertBorrowEntry(date,item,(price * quantity),quantity,userId2,name);
+          await insertBorrowEntry(date,item,(price * quantity),quantity,userId1,"Dairy",userId2);
+          res.status(200).send("Data inserted successfully");
         }
-    } catch (error) {
-        console.error("Error executing query:", error);
-        // Handle the error appropriately, e.g., send an error response
+
     }
-  }
-  else{
-     userId1=req.user.user_id;
-     userId2=null;
-  }
-  db.query("INSERT INTO borrow(date,item,price,quantity,money, user_id,name,userid) VALUES ($1, $2, $3, $4,$5,$6,$7,$8)", [date,item,price, quantity,(price*quantity),userId1,name,userId2])
-  .then(result => {
-    console.log("Data inserted successfully");
+  else{ 
+  await insertBorrowEntry(date,item,(price * quantity),quantity,userId2," ").then(result => {;
     res.status(200).send("Data inserted successfully");
   })
-  .catch(error => {
-    console.error("Error inserting data:", error);
-    res.status(500).send("Error inserting data");
-  });
+  }}
+  catch (error) {
+    console.error("Error executing query:", error);
+    // Handle the error appropriately, e.g., send an error response
+}
 });
 
 

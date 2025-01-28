@@ -6,6 +6,7 @@ import { Strategy as LocalStrategy } from 'passport-local';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import pg from 'pg';
 import axios from "axios";
+import { findUserRole } from "../Models/userModel.js";
 import {
    findUserById,
   findUserByUsername,
@@ -132,6 +133,17 @@ router.post('/auth/google/callback', async (req, res) => {
     } catch (error) {
       console.error('Error registering user:', error);
       res.status(500).json({ message: 'Internal Server Error' });
+    }
+  });
+
+  router.get('/user/role/', passport.authenticate('jwt', { session: false }), async (req, res) => {
+    const userId = req.user.id;
+    try {
+      const role = await findUserRole(userId);
+      console.log("not");
+      res.status(200).json({ role });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   });
 

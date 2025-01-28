@@ -37,7 +37,7 @@ export const getFeedTotals = async (userId, startDate, endDate) => {
 export const getMoneyReceivedTotals = async (userId, startDate, endDate) => {
     const moneyReceivedQuery = `SELECT SUM(quantity) AS totalQuantity, SUM(money) AS totalMoney 
     FROM borrow 
-    WHERE item = 'Money Recieved' AND user_id = $1  AND date BETWEEN $2 AND $3`;
+    WHERE item = 'Money Received' AND user_id = $1  AND date BETWEEN $2 AND $3`;
 
   const result = await db.query(moneyReceivedQuery, [userId, startDate, endDate]);
   return result.rows[0];
@@ -77,7 +77,7 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
       console.log("1234")
       await db.query(
         "INSERT INTO borrow(date, item, money, user_id, name,userid) VALUES ($1, $2, $3, $4, $5,$6)",
-        [date, item, -moneyAmount, senderId, name,receiverId]
+        [date, item, moneyAmount, senderId, name,receiverId]
       );
     } catch (error) {
       console.error("Error inserting 'Money Given' entry:", error);      throw error; // Let the caller handle the error
@@ -105,10 +105,40 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
     const result = await db.query(query, [userId]);
     return parseFloat(result.rows[0].money) || 0;
   };
+
+  const insertBorrowEntry = async (
+    date,
+    item,
+    price,
+    quantity,
+    userId1,
+    name,
+    userId2 = null
+  ) => {
+    try {
+      await db.query(
+        "INSERT INTO borrow(date, item, price, quantity, money, user_id, name, userid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        [
+          date,
+          item,
+          price,
+          quantity,
+          price * quantity, // Calculate the money by multiplying price * quantity
+          userId1, // User ID who is borrowing
+          name, // User's name
+          userId2, // Optional second user ID
+        ]
+      );
+    } catch (error) {
+      console.error("Error inserting Borrow entry:", error);
+      throw error; // Let the caller handle the error
+    }
+  };
   
   export { insertGiveMoneyEntry,
     insertReceiveMoneyEntry,
-    getBorrowTotalForUser
+    getBorrowTotalForUser,
+    insertBorrowEntry
    };
 
 

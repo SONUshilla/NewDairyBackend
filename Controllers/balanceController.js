@@ -66,6 +66,7 @@ router.post('/showBalance', passport.authenticate('jwt', { session: false }), (r
     results.Before = {
       total: totalBeforeStart
     };
+    console.log("1234",results);
     res.status(200).json(results);
   }).catch(err => {
     console.error('Error executing queries:', err);
