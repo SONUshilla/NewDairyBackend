@@ -73,8 +73,6 @@ export const getBorrowBeforeStart = async (userId, startDate) => {
 
 const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,receiverId=null) => {
     try {
-
-      console.log("1234")
       await db.query(
         "INSERT INTO borrow(date, item, money, user_id, name,userid) VALUES ($1, $2, $3, $4, $5,$6)",
         [date, item, moneyAmount, senderId, name,receiverId]

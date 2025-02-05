@@ -44,11 +44,26 @@ const getMilkTotalForUser = async (userId) => {
   return parseFloat(result.rows[0].total) || 0;
 };
 
+const getMorningCustomers = async (adminId, date) => {
+  const query = ` SELECT 
+      ui.name,
+      m.date,
+      m.fat,
+      m.weight
+    FROM users u
+    JOIN usersinfo ui ON ui.userid = u.id
+    JOIN morning m ON m.user_id = u.id
+    WHERE u.user_id = $1
+      AND m.date = $2;`
+  const rows = await db.query(query, [adminId, date]);
+  return rows;
+};
 export {
     createMorningEntries,
     getMorningEntriesByDate,
     getMorningSumOfTotalAfterDate,
     getMorningTotalsBeforeStart,
     getSumOfMorningEntriesByDate,
-    getMilkTotalForUser
+    getMilkTotalForUser,
+    getMorningCustomers
 }

@@ -27,14 +27,27 @@ const getEveningTotalsBeforeStart = async (userId, startDate) => {
   const result = await db.query(eBeforeStart, [userId, startDate]);
   return result.rows[0]; 
 };
-const getEveningSumOfTotalAfterDate= async(userId,startDate)=>{
+const getEveningSumOfTotalAfterDate = async (userId, startDate) => {};
 
-}
-
+const getEveningCustomers = async (adminId, date) => {
+  const query = ` SELECT 
+  ui.name,
+  m.date,
+  m.fat,
+  m.weight
+FROM users u
+JOIN usersinfo ui ON ui.userid = u.id
+JOIN evening m ON m.user_id = u.id
+WHERE u.user_id = $1
+  AND m.date = $2;`;
+  const rows = await db.query(query, [adminId, date]);
+  return rows;
+};
 export {
-    createEveningEntries,
-    getEveningEntriesByDate,
-    getEveningSumOfTotalAfterDate,
-    getEveningTotalsBeforeStart,
-    getSumOfEveningEntriesByDate
-}
+  createEveningEntries,
+  getEveningEntriesByDate,
+  getEveningSumOfTotalAfterDate,
+  getEveningTotalsBeforeStart,
+  getSumOfEveningEntriesByDate,
+  getEveningCustomers,
+};

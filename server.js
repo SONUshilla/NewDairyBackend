@@ -16,6 +16,8 @@ import axios from "axios";
 import db from "./db/db.js";
 import bcrypt from "bcrypt";
 import { insertBorrowEntry } from './Models/borrowModel.js';
+import { getMorningCustomers } from './Models/morningModel.js';
+import { getEveningCustomers } from './Models/eveningModel.js';
 
 
 
@@ -49,6 +51,35 @@ app.use(transactionController);
 app.get('/check-session', passport.authenticate('jwt', { session: false }), (req, res) => {
   res.sendStatus(200);
 });
+
+
+app.get('/arrived-customers',passport.authenticate('jwt', { session: false }), async (req, res) => {
+  // Extract the date from the query string and adminId from the authenticated user
+  const { date } = req.query;
+  
+  const adminId =  req.user.id;  // req.user should be set by your auth middleware
+  if (!adminId || !date) {
+    return res.status(400).json({ error: 'Missing adminId or date query parameter.' });
+  }
+
+  try {
+    // Execute both queries concurrently
+    const [morningData, eveningData] = await Promise.all([
+      getMorningCustomers(adminId, date),
+      getEveningCustomers(adminId, date)
+    ]);
+
+    res.json({
+      morning: morningData.rows,
+      evening: eveningData.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching measurements:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 
 app.get('/user-profile', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
