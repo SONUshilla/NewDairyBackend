@@ -2,7 +2,7 @@ import db from "../db/db.js";
 import express from 'express';
 import passport from 'passport';
 import moment from "moment";
-import {getMilkTotalForUser, getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
+import {getEveningMilkTotal, getMorningMilkTotal, getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
 import {getEveningTotalsBeforeStart,getSumOfEveningEntriesByDate} from "../Models/eveningModel.js";
 import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries, getBorrowTotalForUser} from "../Models/borrowModel.js";
 import { getUsersInfo } from "../Models/userModel.js";
@@ -315,10 +315,11 @@ router.get('/users', passport.authenticate('jwt', { session: false }), async (re
       // Step 2: Calculate additional totals for each user
       const userTotalsPromises = users.map(async (user) => {  
         // Combine the results
-        const milkTotal = await getMilkTotalForUser(user.id) ;
+       const morningTotal=await getMorningMilkTotal(user.id);
+       const eveningTotal=await getEveningMilkTotal(user.id);
         const borrowTotal = await  getBorrowTotalForUser(user.id);
-        const total = milkTotal + borrowTotal;
-  
+        const total = morningTotal+eveningTotal - borrowTotal;
+        console.log(morningTotal+eveningTotal);
         return {
           ...user,
           total

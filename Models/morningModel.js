@@ -33,16 +33,18 @@ const getMorningSumOfTotalAfterDate= async(userId,startDate)=>{
 
 }
 
-const getMilkTotalForUser = async (userId) => {
-  const query = `
-    SELECT COALESCE(SUM(m.total), 0) + COALESCE(SUM(e.total), 0) AS total
-    FROM morning m
-    LEFT JOIN evening e ON m.user_id = e.user_id
-    WHERE m.user_id = $1 OR e.user_id = $1;
-  `;
+const getMorningMilkTotal = async (userId) => {
+  const query = `SELECT SUM(total) AS total FROM morning WHERE user_id = $1`;
   const result = await db.query(query, [userId]);
   return parseFloat(result.rows[0].total) || 0;
 };
+
+const getEveningMilkTotal = async (userId) => {
+  const query = `SELECT SUM(total) AS total FROM evening WHERE user_id = $1`;
+  const result = await db.query(query, [userId]);
+  return parseFloat(result.rows[0].total) || 0;
+};
+
 
 const getMorningCustomers = async (adminId, date) => {
   const query = ` SELECT 
@@ -64,6 +66,7 @@ export {
     getMorningSumOfTotalAfterDate,
     getMorningTotalsBeforeStart,
     getSumOfMorningEntriesByDate,
-    getMilkTotalForUser,
+   getEveningMilkTotal,
+   getMorningMilkTotal,
     getMorningCustomers
 }
