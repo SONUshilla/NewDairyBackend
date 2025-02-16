@@ -53,7 +53,7 @@ passport.use(
     {
       clientID: process.env.SECRET_CLIENT_ID, // Your Google Client ID
       clientSecret: process.env.SECRET_CLIENT_SECRET, // Your Google Client Secret
-      callbackURL: "https://newdairybackend.onrender.com/auth/google/home" // Callback URL configured in your Google API Console
+      callbackURL: "/auth/google/home" // Callback URL configured in your Google API Console
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -115,6 +115,7 @@ router.get(
   }),
   (req, res) => {
     // Create JWT token
+    console.log("working");
     const payload = { id: req.user.id };
     const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
     
