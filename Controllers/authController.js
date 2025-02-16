@@ -4,153 +4,170 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Strategy as LocalStrategy } from 'passport-local';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pg from 'pg';
 import axios from "axios";
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { findUserRole } from "../Models/userModel.js";
 import {
-   findUserById,
+  findUserById,
   findUserByUsername,
   findUserByEmail,
   insertGoogleUserInfo,
   insertManualUserInfo,
-  createUser } from '../Models/userModel.js';
-
-
-const { Client } = pg;
+  createUser
+} from '../Models/userModel.js';
 
 const router = express.Router();
 
-// JWT strategy setup
+/* ========================
+   JWT Strategy for Protected Routes
+   ======================== */
 const jwtOptions = {
-    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-    secretOrKey: 'your_jwt_secret', // Replace with your actual secret key
-  };
-  passport.use(new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
-    
+  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+  secretOrKey: 'your_jwt_secret', // Replace with your actual secret key
+};
+
+passport.use(
+  new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
     try {
-        const user = await findUserById(jwt_payload.id);
-        if (user) {
-            return done(null, user);
-        } else {
-            return done(null, false);
-        }
+      const user = await findUserById(jwt_payload.id);
+      if (user) {
+        return done(null, user);
+      } else {
+        return done(null, false);
+      }
     } catch (err) {
-        return done(err, false);
+      return done(err, false);
     }
-  }));
+  })
+);
 
+/* ========================
+   Google Strategy Setup
+   ======================== */
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.SECRET_CLIENT_ID, // Your Google Client ID
+      clientSecret: process.env.SECRET_CLIENT_SECRET, // Your Google Client Secret
+      callbackURL: "/auth/google/home" // Callback URL configured in your Google API Console
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        const email = profile.emails[0].value;
+        let user = await findUserByEmail(email);
 
+        if (!user) {
+          // Create the user if not found
+          const newUser = await createUser(email, "google", "user"); // Adjust role as needed
+          await insertGoogleUserInfo(profile.displayName, email, profile.photos[0].value, newUser.id);
+          user = newUser;
+        }
 
+        // Continue with Passport callback
+        return done(null, user);
+      } catch (error) {
+        return done(error, null);
+      }
+    }
+  )
+);
 
-
-// Login endpoint
+/* ========================
+   Local Login Endpoint (JWT Issuance)
+   ======================== */
 router.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    try {
-        const user = await findUserByUsername(username);
-        if (user && await bcrypt.compare(password, user.password)) {
-            const payload = { id: user.id };
-            const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100h' }); // Replace with your actual secret key
-            res.json({ token });
-        } else {
-            res.status(401).send('Invalid credentials');
-        }
-    } catch (err) {
-        console.log(err);
-        res.status(500).send('Error logging in');
+  const { username, password } = req.body;
+  try {
+    const user = await findUserByUsername(username);
+    if (user && await bcrypt.compare(password, user.password)) {
+      const payload = { id: user.id };
+      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100h' });
+      res.json({ token });
+    } else {
+      res.status(401).send('Invalid credentials');
     }
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error logging in');
+  }
 });
 
-router.post('/auth/google/callback', async (req, res) => {
-    const { idToken, user,role} = req.body;
- 
-    try {
-      // Verify the Google ID token
-      const response = await axios.get(`https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${idToken}`);
-      const googleData = response.data;
-  
-      if (googleData.email !== user.email) {
-        return res.status(400).json({ error: 'Email mismatch' });
-      }
-  
-      // Check if the user already exists in your database
-      const existingUser = await findUserByEmail(user.email);
-      console.log(existingUser);
-      let userId;
-      if (!existingUser) {
-        // Insert the new user into the users table
-        const insertUserResult = await createUser(user.email, "google", role);
-        userId = insertUserResult.id;
-        // Insert the user info into the usersInfo table
-      await insertGoogleUserInfo(user.name, user.email, user.picture, userId);
-      } else {
-        userId = existingUser.id;
-      }
-  
-      const payload = { id:userId };
-      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
-      console.log(token);
-      // Return the JWT and user information to the frontend
-      res.json({token});
-    } catch (error) {
-      console.error('Error during Google authentication:', error);
-      res.status(500).json({ error: 'Internal Server Error' });
-    }
-  });
-  
-  router.get('/auth/google', passport.authenticate('google', {
-    scope: ['profile', 'email']
-  }));
-  
-  router.get("/authTrue", (req, res) => {
-    console.log("Authentication process complete");
-    res.redirect(`${process.env.URL}`);
-  });
-  
-  router.get("/auth/google/home", passport.authenticate("google", {
-    successRedirect: "/authTrue",
-    failureRedirect: "/login",
-  }));
-  
-  
-  router.post('/register', async (req, res, next) => {
-    const { name,username, password ,role} = req.body;
-  {console.log(name,username,password)}
-    try {
-      const existingUser = findUserByUsername(username);
-  
-      if (existingUser.length > 0) {
-        return res.status(400).json({ message: 'Username already taken' });
-      }
-  
-      const hashedPassword = await bcrypt.hash(password, 10);
+/* ========================
+   Google Authentication Endpoints
+   ======================== */
+// Initiate Google OAuth flow
+router.get(
+  '/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
 
-      const user = await createUser(username, hashedPassword,role);
-      insertManualUserInfo(name, user.id);
-      const payload = { id:user.id };
-      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' }); // Replace with your actual secret key
-      res.status(201).json({ message: 'User registered successfully', token });
-    } catch (error) {
-      console.error('Error registering user:', error);
-      res.status(500).json({ message: 'Internal Server Error' });
+// Callback route after Google has authenticated the user
+// Modify the Google callback route
+router.get(
+  '/auth/google/home',
+  passport.authenticate('google', { 
+    failureRedirect: `${process.env.ORIGIN}/login?error=authentication_failed`,
+    session: false 
+  }),
+  (req, res) => {
+    // Create JWT token
+    const payload = { id: req.user.id };
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
+    
+    // Redirect to frontend with token in URL fragment
+    res.redirect(`${process.env.ORIGIN}/auth/callback#token=${token}`);
+  }
+);
+/* ========================
+   Registration Endpoint (Manual Signup)
+   ======================== */
+router.post('/register', async (req, res) => {
+  const { name, username, password, role } = req.body;
+  try {
+    const existingUser = await findUserByUsername(username);
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username already taken' });
     }
-  });
 
-  router.get('/user/role/', passport.authenticate('jwt', { session: false }), async (req, res) => {
-    const userId = req.user.id;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await createUser(username, hashedPassword, role);
+    await insertManualUserInfo(name, user.id);
+
+    const payload = { id: user.id };
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
+    res.status(201).json({ message: 'User registered successfully', token });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+/* ========================
+   Protected Route to Get User Role
+   ======================== */
+router.get(
+  '/user/role/',
+  passport.authenticate('jwt', { session: false }),
+  async (req, res) => {
     try {
-      const role = await findUserRole(userId);
-      console.log("not");
+      const role = await findUserRole(req.user.id);
       res.status(200).json({ role });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
-  });
+  }
+);
 
-  router.post('/logout', (req, res) => {
-    // With JWT, logout is typically handled client-side by deleting the token
-    res.sendStatus(200);
-  });
+/* ========================
+   Logout Endpoint (Client-side Token Removal)
+   ======================== */
+router.post('/logout', (req, res) => {
+  // With JWT, logout is typically handled client-side by deleting the token.
+  res.sendStatus(200);
+});
 
-
-  export default router;
+export default router;
