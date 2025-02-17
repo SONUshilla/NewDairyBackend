@@ -30,7 +30,7 @@ const port = 5000;
 
 // Middleware setup
 app.use(cors({
-  origin: process.env.ORIGIN ,
+  origin:" process.env.ORIGIN" ,
   credentials: true, // This allows cookies and other credentials to be included in requests
 }));
 app.use(bodyParser.json());
