@@ -108,7 +108,7 @@ router.get(
 // Callback route after Google has authenticated the user
 // Modify the Google callback route
 router.get(
-  '/auth/google/home',
+  '/auth/google/callback',
   passport.authenticate('google', { 
     failureRedirect: `${process.env.ORIGIN}/login?error=authentication_failed`,
     session: false 
