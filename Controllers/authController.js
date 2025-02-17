@@ -120,7 +120,7 @@ router.get(
     const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
     
     // Redirect to frontend with token in URL fragment
-    alert("req came here");
+    console.log(token);
     res.redirect(`https://newdairyfrontend.onrender.com/auth/callback#token=${token}`);
   }
 );
