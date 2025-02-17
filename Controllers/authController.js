@@ -121,7 +121,8 @@ router.get(
     
     // Redirect to frontend with token in URL fragment
     console.log(token);
-    res.redirect(`https://newdairyfrontend.onrender.com/auth/callback#token=${token}`);
+    res.redirect(`${process.env.ORIGIN}/auth/callback?token=${token}`);
+
   }
 );
 /* ========================
