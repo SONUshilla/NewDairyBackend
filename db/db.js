@@ -3,7 +3,7 @@ import pg from 'pg';
 const { Client } = pg;
 
 
-const connectionString = 'postgresql://dairy_database_cwd2_user:FSHPXTG49XgUo0eZFVj3Up0cZAJOKjTj@dpg-d0om6bemcj7s73dak9k0-a.oregon-postgres.render.com/dairy_database_cwd2';
+const connectionString = 'postgresql://dairy_75zy_user:zWg9PkiwMx8k9dJxfkyu0wdl3rctcgax@dpg-d1p7ap2dbo4c73858t00-a.oregon-postgres.render.com/dairy_75zy';
 
 const db = new Client({
    connectionString: connectionString,
