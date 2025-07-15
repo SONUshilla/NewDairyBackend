@@ -102,7 +102,8 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
 
     // Query the database to get the role
     const response = await db.query('SELECT role FROM users WHERE id=$1', [req.user.id]);
-    
+    console.log(req.user.id);
+
     // Ensure the response and rows are not empty
     if (response && response.rows && response.rows.length > 0) {
       const userRole = response.rows[0].role;
