@@ -53,16 +53,17 @@ passport.use(
     {
       clientID: process.env.SECRET_CLIENT_ID, // Your Google Client ID
       clientSecret: process.env.SECRET_CLIENT_SECRET, // Your Google Client Secret
-      callbackURL: "/auth/google/home" // Callback URL configured in your Google API Console
+      callbackURL: "/auth/google/home", // Callback URL configured in your Google API Console
+      passReqToCallback: true, 
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req,accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails[0].value;
         let user = await findUserByEmail(email);
-
+        const role = req.query.state; // ← This is where the role lives now
         if (!user) {
           // Create the user if not found
-          const newUser = await createUser(email, "google", "user"); // Adjust role as needed
+          const newUser = await createUser(email, "google", role); // Adjust role as needed
           await insertGoogleUserInfo(profile.displayName, email, profile.photos[0].value, newUser.id);
           user = newUser;
         }
@@ -100,10 +101,14 @@ router.post('/login', async (req, res) => {
    Google Authentication Endpoints
    ======================== */
 // Initiate Google OAuth flow
-router.get(
-  '/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+router.get('/auth/google', (req, res, next) => {
+  const role = req.query.role || 'user'; // fallback if role is missing
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state: role,
+  })(req, res, next);
+});
+
 
 // Callback route after Google has authenticated the user
 // Modify the Google callback route
@@ -115,12 +120,10 @@ router.get(
   }),
   (req, res) => {
     // Create JWT token
-    console.log("working");
     const payload = { id: req.user.id };
     const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
     
     // Redirect to frontend with token in URL fragment
-    console.log(token);
     res.redirect(`${process.env.ORIGIN}/auth/callback?token=${token}`);
 
   }
@@ -130,6 +133,7 @@ router.get(
    ======================== */
 router.post('/register', async (req, res) => {
   const { name, username, password, role } = req.body;
+  console.log(name, username, password, role);
   try {
     const existingUser = await findUserByUsername(username);
     if (existingUser) {

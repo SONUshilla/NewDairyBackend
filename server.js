@@ -18,6 +18,8 @@ import bcrypt from "bcrypt";
 import { insertBorrowEntry } from './Models/borrowModel.js';
 import { getMorningCustomers } from './Models/morningModel.js';
 import { getEveningCustomers } from './Models/eveningModel.js';
+import multer from 'multer';
+import  path from"path";
 
 
 
@@ -135,36 +137,132 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
  const saltRounds = 10; // Number of salt rounds for bcrypt
  
  // Assuming db.query and other necessary imports are already present
+ const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/"); // folder to store images
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({ storage });
+app.use("/uploads", express.static("uploads"));
+app.post("/upload-db", upload.single("image"), async (req, res) => {
+  if (!req.file) return res.status(400).send("No file uploaded");
+
+  const userId = req.body.userId;
+  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+  // Save this URL to the DB in the `img` column
+  await db.query("INSERT INTO user_images (user_id, image_url) VALUES ($1, $2)", [userId, imageUrl]);
+
+
+  res.send({ success: true, imageUrl });
+});
  
- app.post('/addUser', passport.authenticate('jwt', { session: false }), async (req, res) => {
-   const adminUserId = req.user.id; // Assuming req.user.user_id contains the user ID of the admin
-   const { mobileEmail, name, password } = req.body; // Assuming the request body contains mobileEmail, name, and password
- 
-   try {
-     // Check if the role of the admin user is 'admin'
-     const adminUser = await db.query("SELECT role FROM users WHERE id = $1", [adminUserId]);
-     if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
-       return res.status(403).json({ error: 'You are not authorized to add users.' });
-     }
- 
-     // Hash the password
-     const hashedPassword = await bcrypt.hash(password, saltRounds);
- 
-     // Insert into users table with hashed password
-     const userInsertResult = await db.query("INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id", [mobileEmail, hashedPassword, 'associated user', adminUserId]);
-     const userId = userInsertResult.rows[0].id;
- 
-     // Insert into usersInfo table
-     await db.query("INSERT INTO usersInfo (userid, name) VALUES ($1, $2)", [userId, name]);
- 
-     // Send a success response
-     return res.status(200).json({ message: 'User added successfully.' });
-   } catch (error) {
-     console.error('Error adding user:', error);
-     return res.status(500).json({ error: 'Internal server error.' });
-   }
- });
- 
+app.post('/addUser', passport.authenticate('jwt', { session: false }), upload.single('image'), async (req, res) => {
+  const adminUserId = req.user.id;
+  const { mobileNumber, name, password } = req.body;
+  const image = req.file;
+  try {
+    const adminUser = await db.query("SELECT role FROM users WHERE id = $1", [adminUserId]);
+    if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'You are not authorized to add users.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const userInsertResult = await db.query(
+      "INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id",
+      [mobileNumber, hashedPassword, 'associated user', adminUserId]
+    );
+    const userId = userInsertResult.rows[0].id;
+
+    // Image URL if uploaded
+    let imageUrl = null;
+    if (image) {
+      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${image.filename}`;
+    }
+
+    await db.query(
+      "INSERT INTO usersInfo (userid, name, image,mobile_number) VALUES ($1, $2, $3, $4)",
+      [userId, name, imageUrl,mobileNumber]
+    );
+
+    return res.status(200).json({ message: 'User added successfully.' });
+  } catch (error) {
+    console.error('Error adding user:', error);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+app.put(
+  '/editUser/:id',
+  passport.authenticate('jwt', { session: false }),
+  upload.single('image'),
+  async (req, res) => {
+    const adminUserId = req.user.id;
+    const userIdToUpdate = req.params.id;
+    const { name, mobileNumber } = req.body;
+    const image = req.file;
+
+    try {
+      // Check admin role
+      const adminUser = await db.query(
+        "SELECT role FROM users WHERE id = $1",
+        [adminUserId]
+      );
+      if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
+        return res.status(403).json({ error: 'You are not authorized to edit users.' });
+      }
+
+      // Prepare image URL (or null)
+      const imageUrl = image
+        ? `${req.protocol}://${req.get("host")}/uploads/${image.filename}`
+        : null;
+
+      // Always keep placeholders consistent
+      const query = `
+        UPDATE usersInfo
+        SET name = $1, mobile_number = $2, image = COALESCE($3, image)
+        WHERE userid = $4
+      `;
+
+      const values = [name, mobileNumber, imageUrl, userIdToUpdate];
+
+      await db.query(query, values);
+
+      // Fetch updated user
+      const updatedUserRes = await db.query(
+        `SELECT u.id, 
+                u.username, 
+                ui.name, 
+                ui.mobile_number, 
+                ui.image AS profile_img
+         FROM users u
+         JOIN usersInfo ui ON u.id = ui.userid
+         WHERE u.id = $1`,
+        [userIdToUpdate]
+      );
+
+      if (updatedUserRes.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found after update.' });
+      }
+
+      return res.status(200).json({
+        message: 'User updated successfully.',
+        user: updatedUserRes.rows[0]
+      });
+
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+
  // changing role of the user 
  app.post('/admin/associated', passport.authenticate('jwt', { session: false }),async (req, res) => {
   const { username, password } = req.body;

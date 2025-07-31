@@ -61,7 +61,10 @@ export const getUsersInfo = async (parentUserId) => {
     SELECT 
       u.id AS id, 
       u.username AS username, 
-      ui.name AS name
+      ui.name AS name,
+      ui.email AS email,
+      ui.mobile_number AS mobile_number,
+      ui.image AS profile_img
     FROM users u
     JOIN usersInfo ui ON u.id = ui.userid
     WHERE u.user_id = $1; -- Adjust as needed
