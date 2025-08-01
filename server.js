@@ -149,6 +149,7 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
 
 const upload = multer({ storage });
 app.use("/uploads", express.static("uploads"));
+app.enable('trust proxy');
 app.post("/upload-db", upload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).send("No file uploaded");
 
