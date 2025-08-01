@@ -153,7 +153,8 @@ app.post("/upload-db", upload.single("image"), async (req, res) => {
   if (!req.file) return res.status(400).send("No file uploaded");
 
   const userId = req.body.userId;
-  const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  const imageUrl = `${process.env.BASE_URL || req.protocol + '://' + req.get('host')}/uploads/${image.filename}`;
+
 
   // Save this URL to the DB in the `img` column
   await db.query("INSERT INTO user_images (user_id, image_url) VALUES ($1, $2)", [userId, imageUrl]);
@@ -183,7 +184,7 @@ app.post('/addUser', passport.authenticate('jwt', { session: false }), upload.si
     // Image URL if uploaded
     let imageUrl = null;
     if (image) {
-      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${image.filename}`;
+      const imageUrl = `${process.env.BASE_URL || req.protocol + '://' + req.get('host')}/uploads/${image.filename}`;
     }
 
     await db.query(
