@@ -217,23 +217,19 @@ app.put(
         return res.status(403).json({ error: 'You are not authorized to edit users.' });
       }
 
-      // Prepare image URL (or null)
-      const imageUrl = image
-        ? `${req.protocol}://${req.get("host")}/uploads/${image.filename}`
-        : null;
+      // Always generate HTTPS URLs in production
+      const base = process.env.BASE_URL || `https://${req.get('host')}`;
+      const imageUrl = image ? `${base}/uploads/${image.filename}` : null;
 
-      // Always keep placeholders consistent
       const query = `
         UPDATE usersInfo
         SET name = $1, mobile_number = $2, image = COALESCE($3, image)
         WHERE userid = $4
       `;
-
       const values = [name, mobileNumber, imageUrl, userIdToUpdate];
 
       await db.query(query, values);
 
-      // Fetch updated user
       const updatedUserRes = await db.query(
         `SELECT u.id, 
                 u.username, 
@@ -261,6 +257,7 @@ app.put(
     }
   }
 );
+
 
 
  // changing role of the user 
