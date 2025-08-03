@@ -147,9 +147,11 @@ app.get('/adminAuth', passport.authenticate('jwt', { session: false }), async (r
   }
 });
 
-const upload = multer({ storage });
-app.use("/uploads", express.static("uploads"));
+const upload = multer({ dest: 'temp/' }); // temp folder for upload
+
 app.enable('trust proxy');
+import cloudinary from './cloudinary.js';
+
 app.post(
   '/addUser',
   passport.authenticate('jwt', { session: false }),
@@ -164,7 +166,6 @@ app.post(
         "SELECT role FROM users WHERE id = $1",
         [adminUserId]
       );
-
       if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
         return res.status(403).json({ error: 'You are not authorized to add users.' });
       }
@@ -177,11 +178,12 @@ app.post(
       );
       const userId = userInsertResult.rows[0].id;
 
-      // Always generate HTTPS URLs in production
       let imageUrl = null;
       if (image) {
-        const base = process.env.BASE_URL || `https://${req.get('host')}`;
-        imageUrl = `${base}/uploads/${image.filename}`;
+        const uploadResult = await cloudinary.uploader.upload(image.path, {
+          folder: 'dairy_users' // optional folder in Cloudinary
+        });
+        imageUrl = uploadResult.secure_url;
       }
 
       await db.query(
@@ -197,6 +199,7 @@ app.post(
   }
 );
 
+
 app.put(
   '/editUser/:id',
   passport.authenticate('jwt', { session: false }),
@@ -208,7 +211,6 @@ app.put(
     const image = req.file;
 
     try {
-      // Check admin role
       const adminUser = await db.query(
         "SELECT role FROM users WHERE id = $1",
         [adminUserId]
@@ -217,9 +219,13 @@ app.put(
         return res.status(403).json({ error: 'You are not authorized to edit users.' });
       }
 
-      // Always generate HTTPS URLs in production
-      const base = process.env.BASE_URL || `https://${req.get('host')}`;
-      const imageUrl = image ? `${base}/uploads/${image.filename}` : null;
+      let imageUrl = null;
+      if (image) {
+        const uploadResult = await cloudinary.uploader.upload(image.path, {
+          folder: 'dairy_users'
+        });
+        imageUrl = uploadResult.secure_url;
+      }
 
       const query = `
         UPDATE usersInfo
@@ -227,15 +233,10 @@ app.put(
         WHERE userid = $4
       `;
       const values = [name, mobileNumber, imageUrl, userIdToUpdate];
-
       await db.query(query, values);
 
       const updatedUserRes = await db.query(
-        `SELECT u.id, 
-                u.username, 
-                ui.name, 
-                ui.mobile_number, 
-                ui.image AS profile_img
+        `SELECT u.id, u.username, ui.name, ui.mobile_number, ui.image AS profile_img
          FROM users u
          JOIN usersInfo ui ON u.id = ui.userid
          WHERE u.id = $1`,
@@ -250,13 +251,13 @@ app.put(
         message: 'User updated successfully.',
         user: updatedUserRes.rows[0]
       });
-
     } catch (error) {
       console.error('Error updating user:', error);
       return res.status(500).json({ error: 'Internal server error.' });
     }
   }
 );
+
 
 
 
@@ -372,6 +373,8 @@ app.get('/bothAuth',checkBothRole, passport.authenticate('jwt', { session: false
 // Route to handle items
 app.post('/items', passport.authenticate('jwt', { session: false }),async (req, res) => {
   // Handle items here
+  console.log("price is",req.body.price);
+  console.log("quantity is", req.body.quantity);
   const quantity = req.body.quantity;
   const price = req.body.price;
   const item =req.body.selectedOption;
@@ -384,8 +387,8 @@ app.post('/items', passport.authenticate('jwt', { session: false }),async (req, 
         const name = nameQuery.rows[0]?.name;
    
         if (item) {
-          await insertBorrowEntry(date,item,(price * quantity),quantity,userId2,name);
-          await insertBorrowEntry(date,item,(price * quantity),quantity,userId1,"Dairy",userId2);
+          await insertBorrowEntry(date,item,price ,quantity,userId2,name);
+          await insertBorrowEntry(date,item,price,quantity,userId1,"Dairy",userId2);
           res.status(200).send("Data inserted successfully");
         }
 
