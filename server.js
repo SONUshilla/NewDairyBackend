@@ -372,9 +372,6 @@ app.get('/bothAuth',checkBothRole, passport.authenticate('jwt', { session: false
 
 // Route to handle items
 app.post('/items', passport.authenticate('jwt', { session: false }),async (req, res) => {
-  // Handle items here
-  console.log("price is",req.body.price);
-  console.log("quantity is", req.body.quantity);
   const quantity = req.body.quantity;
   const price = req.body.price;
   const item =req.body.selectedOption;
@@ -410,87 +407,23 @@ app.post('/items', passport.authenticate('jwt', { session: false }),async (req, 
 
 app.post("/singleUser", passport.authenticate('jwt', { session: false }), async(req,res)=>{
   const userId=req.body.userId || req.user.user_id;
-  if (userId === req.user.user_id) {
     const query = `
       SELECT 
-        u.user_id AS id, 
+        u.id AS id, 
         u.username AS username, 
-        ui.name AS name
+        ui.name AS name,
+        ui.email AS email,
+        ui.mobile_number AS mobile_number,
+        ui.image AS profile_img
       FROM users u
-      JOIN usersInfo ui ON u.user_id = ui.userid
-      WHERE u.user_id = $1;
+      JOIN usersInfo ui ON u.id = ui.userid
+      WHERE u.id = $1;
     `;
     const results = await db.query(query, [userId]);
     const users = results.rows;
+  console.log(users)
 
-    const result = {
-      ...users[0],  // Assuming you want to merge the first user object with the total value.
-      total: "--"
-    };
-
-    res.json([result]);
-  }
-  else if(userId==="0")
-  {
-    const result = {
-      name: "All customers",
-      total: "--",
-      username: ""
-    };
-    console.log(result);
-    res.json([result]);
-  } 
-  else
-  {try {
-    const query = `
-      SELECT 
-        u.user_id AS id, 
-        u.username AS username, 
-        ui.name AS name
-      FROM users u
-      JOIN usersInfo ui ON u.user_id = ui.userid
-      WHERE u.user_id=$1  
-    `;
-    const results = await db.query(query,[userId]);
-    const users = results.rows;
-
-    // Step 2: Calculate additional totals for each user
-    const userTotalsPromises = users.map(async (user) => {
-      // Fetch milk and borrow totals for the current user
-      const milkResult = await db.query(
-        `SELECT COALESCE(SUM(m.total), 0) + COALESCE(SUM(e.total), 0) AS total
-         FROM morning m
-         LEFT JOIN evening e ON m.user_id = e.user_id
-         WHERE m.user_id = $1 OR e.user_id = $2;`,
-        [user.id, user.id]
-      );
-
-      const borrowResult = await db.query(
-        `SELECT COALESCE(SUM(money), 0) AS money
-         FROM borrow
-         WHERE user_id = $1;`,
-        [user.id]
-      );
-
-      // Combine the results
-      const milkTotal = parseFloat(milkResult.rows[0].total) || 0;
-      const borrowTotal = parseFloat(borrowResult.rows[0].money) || 0;
-      const total = milkTotal + borrowTotal;
-
-      return {
-        ...user,
-        total
-      };
-    });
-
-    // Wait for all promises to resolve
-    const usersWithTotals = await Promise.all(userTotalsPromises);
-    res.json(usersWithTotals);
-  } catch (err) {
-    console.error('Error fetching users:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-}
+    res.json([results.rows[0]]);
 });
 
 

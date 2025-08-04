@@ -13,26 +13,32 @@ const router = express.Router();
 
 router.post('/admin/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
     // Access the values submitted from the form
-    const { date, weight, fat, price ,userId} = req.body;
+    console.log(req.body);
+    const { date, weight, fat, price ,userId,snf,animalType} = req.body;
     const sqlDate = moment(date).format('YYYY-MM-DD');
-  
-    db.query("INSERT INTO morning (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
-      .then(result => {
+    const issnf = snf === "" ? null : snf;
+    db.query(
+      "INSERT INTO morning (date, weight, fat, price,total, user_id,snf,animaltype) VALUES ($1, $2, $3, $4, $5,$6,$7,$8)",
+      [sqlDate, weight, fat, price, weight * price, userId,issnf,animalType]
+    )
+      .then((result) => {
         console.log("Data inserted successfully");
         res.status(200).send("data inserting successfully");
       })
-      .catch(error => {
+      .catch((error) => {
         console.error("Error inserting data:", error);
         res.status(500).send("Error inserting data");
       });
   });
   router.post('/admin/entries/evening', (req, res) => {
     // Access the values submitted from the form
-    const { date, weight, fat, price ,userId} = req.body;
+    const { date, weight, fat, price ,userId,snf,animalType} = req.body;
     const sqlDate = moment(date).format('YYYY-MM-DD');
-    
-    db.query("INSERT INTO evening (date, weight, fat, price,total, user_id) VALUES ($1, $2, $3, $4, $5,$6)", [sqlDate, weight, fat, price,weight*price, userId])
-      .then(result => {
+    const issnf = snf === "" ? null : snf;
+    db.query(
+      "INSERT INTO evening (date, weight, fat, price,total, user_id,snf,animaltype) VALUES ($1, $2, $3, $4, $5,$6,$7,$8)",
+      [sqlDate, weight, fat, price, weight * price, userId,issnf,animalType]
+    ).then(result => {
         console.log("Data inserted successfully");
         res.status(200).send("Data inserted successfully");
       })
