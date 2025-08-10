@@ -91,8 +91,8 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
       AND date BETWEEN $2 AND $3 
   `;
   }
-    const morningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
-    const eveningQuery = `SELECT SUM(weight) AS totalMilk, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
+    const morningQuery = `SELECT SUM(weight) AS weight, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
+    const eveningQuery = `SELECT SUM(weight) AS weight, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
 
   
     let results = {};
@@ -116,7 +116,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         results.borrow = borrowResults.rows;
         
         // Send the results as a response
-        console.log("Results:", results);
         res.status(200).json(results);
       })
       .catch(error => {
@@ -326,7 +325,7 @@ router.get('/users', passport.authenticate('jwt', { session: false }), async (re
        const eveningTotal=await getEveningMilkTotal(user.id);
         const borrowTotal = await  getBorrowTotalForUser(user.id);
         const total = morningTotal+eveningTotal - borrowTotal;
-        console.log(morningTotal, eveningTotal, borrowTotal, total);
+        console.log(morningTotal+eveningTotal);
         return {
           ...user,
           total
