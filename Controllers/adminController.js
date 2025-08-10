@@ -116,6 +116,7 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         results.borrow = borrowResults.rows;
         
         // Send the results as a response
+        console.log("Results:", results);
         res.status(200).json(results);
       })
       .catch(error => {
@@ -325,7 +326,7 @@ router.get('/users', passport.authenticate('jwt', { session: false }), async (re
        const eveningTotal=await getEveningMilkTotal(user.id);
         const borrowTotal = await  getBorrowTotalForUser(user.id);
         const total = morningTotal+eveningTotal - borrowTotal;
-        console.log(morningTotal+eveningTotal);
+        console.log(morningTotal, eveningTotal, borrowTotal, total);
         return {
           ...user,
           total

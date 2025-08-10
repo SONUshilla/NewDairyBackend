@@ -96,13 +96,19 @@ const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,rece
 
   const getBorrowTotalForUser = async (userId) => {
     const query = `
-      SELECT COALESCE(SUM(money), 0) AS money
+      SELECT COALESCE(SUM(
+        CASE 
+          WHEN item = 'Money Given' THEN -money 
+          ELSE money 
+        END
+      ), 0) AS money
       FROM borrow
       WHERE user_id = $1;
     `;
     const result = await db.query(query, [userId]);
     return parseFloat(result.rows[0].money) || 0;
   };
+  
 
   const insertBorrowEntry = async (
     date,
