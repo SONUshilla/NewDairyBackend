@@ -33,12 +33,12 @@ export const insertGoogleUserInfo = async (name, email, image, userId) => {
   };
   
   // Function to insert user info for manual registration
-  export const insertManualUserInfo = async (name, userId) => {
+  export const insertManualUserInfo = async (name, userId,username) => {
     const query = `
-      INSERT INTO usersInfo (name, userid) 
-      VALUES ($1, $2)
+      INSERT INTO usersInfo (name, userid,mobile_number) 
+      VALUES ($1, $2,$3)
     `;
-    const values = [name, userId];
+    const values = [name, userId,username];
     return db.query(query, values);
   };
 
@@ -70,6 +70,52 @@ export const getUsersInfo = async (parentUserId) => {
     WHERE u.user_id = $1; -- Adjust as needed
   `;
   const result = await db.query(query, [parentUserId]);
+  return result.rows;
+};
+
+
+export const getUsersInfoWithTotals = async (adminId) => {
+  const query = `
+    SELECT 
+      u.id AS id, 
+      u.username AS username, 
+      ui.name AS name,
+      ui.email AS email,
+      ui.mobile_number AS mobile_number,
+      ui.image AS profile_img,
+      COALESCE(m.morning_total, 0) AS morning_total,
+      COALESCE(e.evening_total, 0) AS evening_total,
+      COALESCE(b.borrow_total, 0) AS borrow_total,
+      COALESCE(m.morning_total, 0) + COALESCE(e.evening_total, 0) - COALESCE(b.borrow_total, 0) AS total
+    FROM users u
+    JOIN usersInfo ui ON u.id = ui.userid
+    LEFT JOIN (
+      SELECT user_id, SUM(total) AS morning_total
+      FROM morning
+      GROUP BY user_id
+    ) m ON u.id = m.user_id
+    LEFT JOIN (
+      SELECT user_id, SUM(total) AS evening_total
+      FROM evening
+      GROUP BY user_id
+    ) e ON u.id = e.user_id
+    LEFT JOIN (
+      SELECT 
+        user_id,
+        SUM(
+          CASE 
+            WHEN item = 'Money Given' THEN -money 
+            ELSE money 
+          END
+        ) AS borrow_total
+      FROM borrow
+      GROUP BY user_id
+    ) b ON u.id = b.user_id
+    WHERE u.user_id = $1
+    ORDER BY ui.name;
+  `;
+
+  const result = await db.query(query, [adminId]);
   return result.rows;
 };
 

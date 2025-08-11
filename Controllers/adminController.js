@@ -6,6 +6,7 @@ import {getEveningMilkTotal, getMorningMilkTotal, getMorningTotalsBeforeStart,ge
 import {getEveningTotalsBeforeStart,getSumOfEveningEntriesByDate} from "../Models/eveningModel.js";
 import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries, getBorrowTotalForUser} from "../Models/borrowModel.js";
 import { getUsersInfo } from "../Models/userModel.js";
+import { getUsersInfoWithTotals } from "../Models/userModel.js";
 
 
 const router = express.Router();
@@ -315,31 +316,16 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
     }
   });
 
-router.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
+  router.get('/users', passport.authenticate('jwt', { session: false }), async (req, res) => {
     try {
-      const users = await getUsersInfo(req.user.id);
-      // Step 2: Calculate additional totals for each user
-      const userTotalsPromises = users.map(async (user) => {  
-        // Combine the results
-       const morningTotal=await getMorningMilkTotal(user.id);
-       const eveningTotal=await getEveningMilkTotal(user.id);
-        const borrowTotal = await  getBorrowTotalForUser(user.id);
-        const total = morningTotal+eveningTotal - borrowTotal;
-        console.log(morningTotal+eveningTotal);
-        return {
-          ...user,
-          total
-        };
-      });
-  
-      // Wait for all promises to resolve
-      const usersWithTotals = await Promise.all(userTotalsPromises);
-      res.json(usersWithTotals);
+      const users = await getUsersInfoWithTotals(req.user.id);
+      res.json(users);
     } catch (err) {
       console.error('Error fetching users:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+  
   
 
   export default router;

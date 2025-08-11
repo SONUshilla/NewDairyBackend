@@ -87,6 +87,7 @@ app.get('/user-profile', passport.authenticate('jwt', { session: false }), async
   try {
     console.log(req.user.id);
     const profile = await db.query("SELECT * FROM usersinfo WHERE userid = $1", [req.user.id]);
+    
     const userProfile = profile.rows[0];
 
     res.status(200).json({ userProfile });
@@ -198,6 +199,52 @@ app.post(
     }
   }
 );
+// Reset Password Route
+app.post(
+  '/user/resetpassword',
+  passport.authenticate('jwt', { session: false }),
+  async (req, res) => {
+    const adminUserId = req.user.id; // The ID of the logged-in admin
+    const { userId, username, newPassword } = req.body;
+    console.log("Reset Password Request:", req.body);
+    try {
+      // Check if the logged-in user is an admin
+      const adminUser = await db.query(
+        "SELECT role FROM users WHERE id = $1",
+        [adminUserId]
+      );
+
+      if (adminUser.rows.length === 0 || adminUser.rows[0].role !== 'admin') {
+        return res.status(403).json({ error: 'You are not authorized to reset passwords.' });
+      }
+
+      // Ensure the user exists
+      const targetUser = await db.query(
+        "SELECT id FROM users WHERE id = $1 AND username = $2",
+        [userId, username]
+      );
+      console.log("Target User:", targetUser.rows);
+      if (targetUser.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found.' });
+      }
+
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+      // Update the password in DB
+      await db.query(
+        "UPDATE users SET password = $1 WHERE id = $2",
+        [hashedPassword, userId]
+      );
+
+      res.json({ success: true, message: 'Password reset successfully.' });
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
 
 
 app.put(
