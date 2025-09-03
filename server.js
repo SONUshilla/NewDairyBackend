@@ -163,6 +163,7 @@ app.post(
     const image = req.file;
 
     try {
+      // Check if requester is admin
       const adminUser = await db.query(
         "SELECT role FROM users WHERE id = $1",
         [adminUserId]
@@ -171,22 +172,36 @@ app.post(
         return res.status(403).json({ error: 'You are not authorized to add users.' });
       }
 
+      // 🔹 Check if mobile number already exists (username = mobile)
+      const existingUser = await db.query(
+        "SELECT id FROM users WHERE username = $1",
+        [mobileNumber]
+      );
+
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ error: 'Mobile number already exists.' });
+      }
+
+      // Hash password
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+      // Insert into users table
       const userInsertResult = await db.query(
         "INSERT INTO users (username, password, role, user_id) VALUES ($1, $2, $3, $4) RETURNING id",
         [mobileNumber, hashedPassword, 'associated user', adminUserId]
       );
       const userId = userInsertResult.rows[0].id;
 
+      // Upload image if provided
       let imageUrl = null;
       if (image) {
         const uploadResult = await cloudinary.uploader.upload(image.path, {
-          folder: 'dairy_users' // optional folder in Cloudinary
+          folder: 'dairy_users'
         });
         imageUrl = uploadResult.secure_url;
       }
 
+      // Insert into usersInfo table
       await db.query(
         "INSERT INTO usersInfo (userid, name, image, mobile_number) VALUES ($1, $2, $3, $4)",
         [userId, name, imageUrl, mobileNumber]
@@ -199,6 +214,7 @@ app.post(
     }
   }
 );
+
 // Reset Password Route
 app.post(
   '/user/resetpassword',
