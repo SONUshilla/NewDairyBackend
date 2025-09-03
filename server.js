@@ -474,6 +474,138 @@ app.post("/singleUser", passport.authenticate('jwt', { session: false }), async(
 });
 
 
+app.get("/prompt",passport.authenticate('jwt', { session: false }), async (req, res) => {
+  try {
+    const userId = req.user?.id; // replace with actual auth
+
+    // 1. Get user info
+    const userResult = await db.query(
+      `SELECT id, joining_date FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (userResult.rows.length === 0) {
+      return res.json({ showFeedback: false });
+    }
+
+    const user = userResult.rows[0];
+    const today = new Date();
+    const joiningDate = new Date(user.joining_date);
+
+    // 2. Check feedback table (last_shown + already submitted)
+    const feedbackResult = await db.query(
+      `SELECT last_shown, rating, feedback 
+       FROM feedback 
+       WHERE user_id = $1 
+       ORDER BY submitted_at DESC 
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (feedbackResult.rows.length > 0) {
+      const fb = feedbackResult.rows[0];
+
+      // Block if already submitted feedback
+      if (fb.rating || fb.feedback) {
+        return res.json({ showFeedback: false });
+      }
+
+      // Block if shown in the last 2 days
+      if (fb.last_shown) {
+        const lastShown = new Date(fb.last_shown);
+        const diffDays =
+          (today.getTime() - lastShown.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays < 2) {
+          return res.json({ showFeedback: false });
+        }
+      }
+    }
+
+    // 3. Condition A: Joined within last 1 day
+    const daysSinceJoining =
+      (today.getTime() - joiningDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    let showFeedback = false;
+    if (daysSinceJoining >= 1) {
+      showFeedback = true;
+    } else {
+      // 4. Condition B: Entry count in morning/evening > 2
+      const morningRes = await db.query(
+        `SELECT COUNT(*) AS count FROM morning WHERE user_id = $1`,
+        [userId]
+      );
+      const eveningRes = await db.query(
+        `SELECT COUNT(*) AS count FROM evening WHERE user_id = $1`,
+        [userId]
+      );
+
+      const morningCount = parseInt(morningRes.rows[0].count, 10);
+      const eveningCount = parseInt(eveningRes.rows[0].count, 10);
+
+      if (morningCount > 2 || eveningCount > 2) {
+        showFeedback = true;
+      }
+    }
+
+    // 5. Update last_shown if showing
+    if (showFeedback) {
+      await db.query(
+        `INSERT INTO feedback (user_id, last_shown) 
+         VALUES ($1, NOW())
+         ON CONFLICT (user_id) 
+         DO UPDATE SET last_shown = NOW()`,
+        [userId]
+      );
+    }
+
+    res.json({ showFeedback });
+  } catch (error) {
+    console.error("Error checking feedback prompt:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/feedback
+app.post(
+  "/api/feedback",
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const { rating, feedback } = req.body;
+
+      if (!rating && !feedback) {
+        return res.status(400).json({ error: "Rating or feedback is required" });
+      }
+
+      // Update the existing feedback row for this user
+      const result = await db.query(
+        `UPDATE feedback
+         SET rating = $1,
+             feedback = $2,
+             submitted_at = NOW()
+         WHERE user_id = $3
+         RETURNING id, user_id, rating, feedback, submitted_at, last_shown`,
+        [rating, feedback, userId]
+      );
+
+      if (result.rows.length === 0) {
+        // fallback: if no prompt row exists, insert a fresh one
+        const insertRes = await db.query(
+          `INSERT INTO feedback (user_id, rating, feedback, submitted_at)
+           VALUES ($1, $2, $3, NOW())
+           RETURNING id, user_id, rating, feedback, submitted_at, last_shown`,
+          [userId, rating, feedback]
+        );
+        return res.json({ success: true, feedback: insertRes.rows[0] });
+      }
+
+      res.json({ success: true, feedback: result.rows[0] });
+    } catch (error) {
+      console.error("Error submitting feedback:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 
 
 
