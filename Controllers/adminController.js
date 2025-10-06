@@ -2,9 +2,10 @@ import db from "../db/db.js";
 import express from 'express';
 import passport from 'passport';
 import moment from "moment";
-import {getEveningMilkTotal, getMorningMilkTotal, getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
+import { createEveningEntries } from "../Models/eveningModel.js";
+import {createMorningEntries, getCustomerMorningTotalsBeforeStart, getEveningMilkTotal, getMorningMilkTotal, getMorningTotalsBeforeStart,getSumOfMorningEntriesByDate} from "../Models/morningModel.js";
 import {getEveningTotalsBeforeStart,getSumOfEveningEntriesByDate} from "../Models/eveningModel.js";
-import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries, getBorrowTotalForUser} from "../Models/borrowModel.js";
+import {getFeedTotals,getGheeTotals,getMoneyGivenTotals,getMoneyReceivedTotals,getBorrowBeforeStart,getBorrowEntries, getBorrowTotalForUser, getCustomerBorrowBeforeStart} from "../Models/borrowModel.js";
 import { getUsersInfo } from "../Models/userModel.js";
 import { getUsersInfoWithTotals } from "../Models/userModel.js";
 
@@ -12,41 +13,35 @@ import { getUsersInfoWithTotals } from "../Models/userModel.js";
 const router = express.Router();
 
 
-router.post('/admin/entries/morning', passport.authenticate('jwt', { session: false }), (req, res) => {
+router.post('/admin/entries/morning', passport.authenticate('jwt', { session: false }), async (req, res) => {
     // Access the values submitted from the form
-    console.log(req.body);
-    const { date, weight, fat, price ,userId,snf,animalType} = req.body;
-    const sqlDate = moment(date).format('YYYY-MM-DD');
-    const issnf = snf === "" ? null : snf;
-    db.query(
-      "INSERT INTO morning (date, weight, fat, price,total, user_id,snf,animaltype) VALUES ($1, $2, $3, $4, $5,$6,$7,$8)",
-      [sqlDate, weight, fat, price, weight * price, userId,issnf,animalType]
-    )
-      .then((result) => {
-        console.log("Data inserted successfully");
-        res.status(200).send("data inserting successfully");
-      })
-      .catch((error) => {
-        console.error("Error inserting data:", error);
-        res.status(500).send("Error inserting data");
-      });
+    try {
+      const { date, weight, fat, price, userId, snf, animalType } = req.body;
+      const sqlDate = moment(date).format('YYYY-MM-DD');
+      const issnf = snf === "" ? null : snf;
+  
+      await createMorningEntries(sqlDate, weight, fat, price, userId,req.user.id, issnf, animalType);
+  
+      console.log("Data inserted successfully");
+      res.status(200).send("Data inserted successfully");
+    } catch (error) {
+      console.error("Error inserting data:", error);
+      res.status(500).send("Error inserting data");
+    }
   });
-  router.post('/admin/entries/evening', (req, res) => {
+  router.post('/admin/entries/evening', passport.authenticate('jwt', { session: false }),async (req, res) => {
     // Access the values submitted from the form
-    const { date, weight, fat, price ,userId,snf,animalType} = req.body;
-    const sqlDate = moment(date).format('YYYY-MM-DD');
-    const issnf = snf === "" ? null : snf;
-    db.query(
-      "INSERT INTO evening (date, weight, fat, price,total, user_id,snf,animaltype) VALUES ($1, $2, $3, $4, $5,$6,$7,$8)",
-      [sqlDate, weight, fat, price, weight * price, userId,issnf,animalType]
-    ).then(result => {
-        console.log("Data inserted successfully");
-        res.status(200).send("Data inserted successfully");
-      })
-      .catch(error => {
-        console.error("Error inserting data:", error);
-        res.status(500).send("Error inserting data");
-      });
+    try {
+      const { date, weight, fat, price, userId, snf, animalType } = req.body;
+      const sqlDate = moment(date).format('YYYY-MM-DD');
+      const issnf = snf === "" ? null : snf;
+  
+      await createEveningEntries(sqlDate, weight, fat, price, userId,req.user.id, issnf, animalType);
+      res.status(200).send("Data inserted successfully");
+    } catch (error) {
+      console.error("Error inserting data:", error);
+      res.status(500).send("Error inserting data");
+    }
   });
   
   router.post('/admin/showEntries', async (req, res) => {
@@ -72,43 +67,17 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
   //admin balance 
   router.post('/admin/balanceSheet', passport.authenticate('jwt', { session: false }), (req, res) => {
     const { startDate, endDate,userId} = req.body;
-    let borrowQuery; // Declare borrowQuery outside the conditional blocks
-  if(userId=="0")
-  {
-    borrowQuery = `
-    SELECT id,date, item, quantity, price, money, name 
-    FROM borrow 
-    WHERE user_id = $1 
-      AND name IS NOT NULL 
-      AND date BETWEEN $2 AND $3 
-  `;
-  }
-  else{
-    borrowQuery = `
-    SELECT id,date, item, quantity, price, money, name 
-    FROM borrow 
-    WHERE user_id = $1 
-      AND name IS NOT NULL 
-      AND date BETWEEN $2 AND $3 
-  `;
-  }
     const morningQuery = `SELECT SUM(weight) AS weight, SUM(total) AS total FROM morning WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
     const eveningQuery = `SELECT SUM(weight) AS weight, SUM(total) AS total FROM evening WHERE user_id = $1 AND date BETWEEN $2 AND $3`;
-
+    const borrowQuery = `SELECT id,date, item, quantity, price, money, name FROM borrow  WHERE user_id = $1  AND name IS NOT NULL AND date BETWEEN $2 AND $3`;
   
     let results = {};
     const queries = [
       db.query(morningQuery, [userId, startDate, endDate]),
       db.query(eveningQuery, [userId, startDate, endDate]),
+      db.query(borrowQuery,  [userId, startDate, endDate]),
     ];
     
-    // Conditionally add the borrowQuery based on the option
-    if (userId=="0") {
-      queries.push(db.query(borrowQuery, [req.user.id, startDate, endDate]));
-     
-    } else {
-      queries.push(db.query(borrowQuery, [userId, startDate, endDate]));
-    }
     // Execute all queries
     Promise.all(queries)
       .then(([morningResults, eveningResults, borrowResults]) => {
@@ -141,8 +110,8 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         getMoneyReceivedTotals(userId,startDate,endDate),
         getMoneyGivenTotals(userId,startDate,endDate),
         getGheeTotals(userId,startDate,endDate),
-        getBorrowBeforeStart(userId,startDate),
-        getMorningTotalsBeforeStart(userId,startDate),
+        getCustomerBorrowBeforeStart(userId,startDate),
+        getCustomerMorningTotalsBeforeStart(userId,startDate),
         getEveningTotalsBeforeStart(userId,startDate),
     
       ]).then(([morningResults, eveningResults, feedResults, moneyReceivedResults, moneyGivenResults, gheeResults, bBeforeStartResults, mBeforeStartResults, eBeforeStartResults]) => {
@@ -174,8 +143,9 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
           totalQuantity: parseFloat(gheeResults.totalquantity) || 0,
           totalMoney: parseFloat(gheeResults.totalmoney) || 0,
         };
-      
+        console.log("morning total",parseFloat(mBeforeStartResults.totalmorning)) 
         const totalBeforeStart = (
+         
           (parseFloat(mBeforeStartResults.totalmorning) || 0) + 
           (parseFloat(eBeforeStartResults.totalevening) || 0) +
           (parseFloat(bBeforeStartResults.totalmoney) || 0)
@@ -184,7 +154,6 @@ router.post('/admin/entries/morning', passport.authenticate('jwt', { session: fa
         results.Before = {
           total: totalBeforeStart
         };
-        console.log(results);
         res.status(200).json(results);
       }).catch(err => {
         console.error('Error executing queries:', err);

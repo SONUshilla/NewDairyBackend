@@ -63,12 +63,21 @@ export const getGheeTotals = async (userId, startDate, endDate) => {
 
 // Get balances from borrow table before the start date
 export const getBorrowBeforeStart = async (userId, startDate) => {
-    const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Money Given' THEN money WHEN item IN ('Money Recieved', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
+    const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Money Received' THEN money WHEN item IN ('Money Given', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
     FROM borrow 
     WHERE user_id = $1 
     AND date < $2`;
   const result = await db.query(bBeforeStart, [userId, startDate]);
   return result.rows[0]; 
+};
+
+export const getCustomerBorrowBeforeStart = async (userId, startDate) => {
+  const bBeforeStart = `SELECT SUM(CASE WHEN item = 'Money Given' THEN money WHEN item IN ('Money Received', 'Ghee','Feed') THEN -money  ELSE 0 END) AS totalMoney 
+  FROM borrow 
+  WHERE user_id = $1 
+  AND date < $2`;
+const result = await db.query(bBeforeStart, [userId, startDate]);
+return result.rows[0]; 
 };
 
 const insertGiveMoneyEntry = async (date, item, moneyAmount, senderId, name,receiverId=null) => {

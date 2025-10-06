@@ -9,12 +9,12 @@ const router = express.Router();
 
 router.post('/entries/morning', passport.authenticate('jwt', { session: false }), async (req, res) => {
     // Access the values submitted from the form
-    const { date, weight, fat, price } = req.body;  
-    
+    const { date, weight, fat, price, snf, animalType } = req.body;
+    const issnf = snf === "" ? null : snf;
     try{
-         await createMorningEntries(date,weight,fat,price,req.user.id);
-         res.status(200).send("Morning entry created successfully.");
-    }
+        await createMorningEntries(date,weight,fat,price,req.user.id,req.user.id,issnf,animalType);
+        res.status(200).send("Morning entry created successfully.");
+   }
       catch(error) {
         console.error("Error inserting data:", error);
         res.status(500).send("Error inserting data");
@@ -24,9 +24,10 @@ router.post('/entries/morning', passport.authenticate('jwt', { session: false })
 
   router.post('/entries/evening', passport.authenticate('jwt', { session: false }), async (req, res) => {
     // Access the values submitted from the form
-    const { date, weight, fat, price } = req.body;    
+    const { date, weight, fat, price, snf, animalType } = req.body;
+    const issnf = snf === "" ? null : snf;
     try{
-        await createEveningEntries(date,weight,fat,price,req.user.id);
+        await createEveningEntries(date,weight,fat,price,req.user.id,req.user.id,issnf,animalType);
         res.status(200).send("Morning entry created successfully.");
    }
      catch(error) {
