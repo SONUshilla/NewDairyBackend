@@ -54,6 +54,12 @@ app.get('/check-session', passport.authenticate('jwt', { session: false }), (req
   res.sendStatus(200);
 });
 
+app.get('/ping', (req, res) => {
+  console.log(`Ping received at ${new Date().toISOString()}`);
+  res.send('pong');
+});
+
+
 
 app.get('/arrived-customers',passport.authenticate('jwt', { session: false }), async (req, res) => {
   // Extract the date from the query string and adminId from the authenticated user
