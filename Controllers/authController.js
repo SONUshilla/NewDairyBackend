@@ -86,7 +86,7 @@ router.post('/login', async (req, res) => {
     const user = await findUserByUsername(username);
     if (user && await bcrypt.compare(password, user.password)) {
       const payload = { id: user.id };
-      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100h' });
+      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100d' });
       res.json({ token });
     } else {
       res.status(401).send('Invalid credentials');
@@ -120,7 +120,7 @@ router.get(
   }),
   (req, res) => {
     const payload = { id: req.user.id };
-    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100d' });
 
     // Detect if login is from mobile app
     if (req.query.source === 'mobile') {
@@ -150,7 +150,7 @@ router.post('/register', async (req, res) => {
     await insertManualUserInfo(name, user.id,username);
 
     const payload = { id: user.id };
-    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100d' });
     res.status(201).json({ message: 'User registered successfully', token });
   } catch (error) {
     console.error('Error registering user:', error);
