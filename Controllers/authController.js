@@ -86,7 +86,7 @@ router.post('/login', async (req, res) => {
     const user = await findUserByUsername(username);
     if (user && await bcrypt.compare(password, user.password)) {
       const payload = { id: user.id };
-      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '100h' });
+      const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '30d' });
       res.json({ token });
     } else {
       res.status(401).send('Invalid credentials');
@@ -122,7 +122,7 @@ router.post('/login', async (req, res) => {
   
       // Existing user → login directly
       const jwtToken = jwt.sign({ id: user.id }, "your_jwt_secret", {
-        expiresIn: "100h",
+        expiresIn: "30d",
       });
   
       return res.status(200).json({ token: jwtToken });
@@ -219,7 +219,7 @@ router.post('/register', async (req, res) => {
     await insertManualUserInfo(name, user.id,username);
 
     const payload = { id: user.id };
-    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '30d' });
     res.status(201).json({ message: 'User registered successfully', token });
   } catch (error) {
     console.error('Error registering user:', error);
