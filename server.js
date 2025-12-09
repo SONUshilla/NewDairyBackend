@@ -87,9 +87,7 @@ app.get('/user-profile', passport.authenticate('jwt', { session: false }), async
   try {
     console.log(req.user.id);
     const profile = await db.query("SELECT * FROM usersinfo WHERE userid = $1", [req.user.id]);
-    
     const userProfile = profile.rows[0];
-
     res.status(200).json({ userProfile });
   } catch (error) {
     res.status(500).json({ message: 'Internal Server Error' });
