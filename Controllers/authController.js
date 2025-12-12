@@ -82,6 +82,7 @@ passport.use(
    ======================== */
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  console.log("username",username,"password",password)
   try {
     const user = await findUserByUsername(username);
     if (user && await bcrypt.compare(password, user.password)) {
@@ -101,6 +102,7 @@ router.post('/login', async (req, res) => {
    Google Authentication Endpoints
    ======================== */
    router.post("/auth/google", async (req, res) => {
+    console.log("do i get")
     try {
       const { token } = req.body;
   
