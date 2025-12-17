@@ -90,7 +90,7 @@ router.post('/login', async (req, res) => {
       const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '30d' });
       res.json({ token });
     } else {
-      res.status(401).send('Invalid credentials');
+      res.status(401).send('Invalid Username or Password');
     }
   } catch (err) {
     console.error(err);
@@ -102,7 +102,6 @@ router.post('/login', async (req, res) => {
    Google Authentication Endpoints
    ======================== */
    router.post("/auth/google", async (req, res) => {
-    console.log("do i get")
     try {
       const { token } = req.body;
   
@@ -213,7 +212,7 @@ router.post('/register', async (req, res) => {
   try {
     const existingUser = await findUserByUsername(username);
     if (existingUser) {
-      return res.status(400).json({ message: 'Username already taken' });
+      return res.status(400).json({ message: 'Mobile Number already exist' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
