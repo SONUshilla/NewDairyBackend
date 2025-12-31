@@ -1,19 +1,19 @@
-import pg from 'pg';
+import pkg from 'pg';
+const { Pool } = pkg;
 
-const { Client } = pg;
 
 // ✅ Replace this with your actual Supabase database password
 const connectionString = 'postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu@9728229828@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
 
-const db = new Client({
+const db = new Pool({
   connectionString,
   ssl: {
-    rejectUnauthorized: false, // Needed for Supabase's SSL requirement
+    rejectUnauthorized: false,
   },
 });
 
-db.connect()
-  .then(() => console.log("✅ Connected to Supabase PostgreSQL"))
-  .catch(err => console.error("❌ Connection error:", err.stack));
+db.on('connect', () => console.log('✅ Connected to Supabase PostgreSQL'));
+db.on('error', (err) => console.error('🔥 PostgreSQL pool error:', err));
 
 export default db;
+
