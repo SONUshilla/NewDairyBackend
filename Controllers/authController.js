@@ -196,39 +196,7 @@ passport.use(
     }
   });
 
-  
-// Initiate Google OAuth flow
-// router.get('/auth/google', (req, res, next) => {
-//   const role = req.query.role || 'admin'; // fallback if role is missing
-//   passport.authenticate('google', {
-//     scope: ['profile', 'email'],
-//     state: role,
-//   })(req, res, next);
-// });
 
-
-// Callback route after Google has authenticated the user
-// Callback route after Google auth
-// router.get(
-//   '/auth/google/home',
-//   passport.authenticate('google', { 
-//     failureRedirect: `${process.env.ORIGIN}/login?error=authentication_failed`,
-//     session: false 
-//   }),
-//   (req, res) => {
-//     const payload = { id: req.user.id };
-//     const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '1h' });
-
-//     // Detect if login is from mobile app
-//     if (req.query.source === 'mobile') {
-//       // Redirect back to app
-//       res.redirect(`myapp://auth/callback?token=${token}`);
-//     } else {
-//       // Normal website login
-//       res.redirect(`${process.env.ORIGIN}/auth/callback?token=${token}`);
-//     }
-//   }
-// );
 
 /* ========================
    Registration Endpoint (Manual Signup)
