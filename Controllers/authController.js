@@ -80,23 +80,50 @@ passport.use(
 /* ========================
    Local Login Endpoint (JWT Issuance)
    ======================== */
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  console.log("username",username,"password",password)
-  try {
-    const user = await findUserByUsername(username);
-    if (user && await bcrypt.compare(password, user.password)) {
+   router.post('/login', async (req, res) => {
+    console.log('🔵 /login request received');
+  
+    try {
+      console.log('🔹 Raw body:', req.body);
+  
+      const { username, password } = req.body;
+  
+      console.log('🔹 Parsed credentials:', {
+        username,
+        passwordExists: !!password
+      });
+  
+      console.log('🟡 Calling findUserByUsername...');
+      const user = await findUserByUsername(username);
+      console.log('🟢 findUserByUsername returned:', user);
+  
+      if (!user) {
+        console.log('🔴 User not found');
+        return res.status(401).send('Invalid Username or Password');
+      }
+  
+      console.log('🟡 Comparing password with bcrypt...');
+      const isMatch = await bcrypt.compare(password, user.password);
+      console.log('🟢 bcrypt.compare result:', isMatch);
+  
+      if (!isMatch) {
+        console.log('🔴 Password mismatch');
+        return res.status(401).send('Invalid Username or Password');
+      }
+  
+      console.log('🟡 Creating JWT...');
       const payload = { id: user.id };
       const token = jwt.sign(payload, 'your_jwt_secret', { expiresIn: '30d' });
-      res.json({ token });
-    } else {
-      res.status(401).send('Invalid Username or Password');
+  
+      console.log('🟢 Login successful, sending response');
+      return res.json({ token });
+  
+    } catch (err) {
+      console.error('🔥 Login error:', err);
+      return res.status(500).send('Error logging in');
     }
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Error logging in');
-  }
-});
+  });
+  
 
 /* ========================
    Google Authentication Endpoints
