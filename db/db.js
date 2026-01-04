@@ -1,34 +1,24 @@
-// db.js
 import pkg from 'pg';
 const { Pool } = pkg;
 
-// Create connection pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  
-  // CRITICAL: Add SSL for Render
+// ✅ Replace this with your actual Supabase database password
+const connectionString = 'postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu@9728229828@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
+
+
+const db = new Pool({
+  connectionString,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
   },
-  
-  // Connection pool settings
-  max: 10,
-  min: 2,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
 });
 
-// Add debugging
-pool.on('connect', () => console.log('✅ DB connected'));
-pool.on('error', (err) => console.error('❌ DB error:', err.message));
+// Optional: Test connection
+db.connect()
+  .then(client => {
+    console.log("✅ Connected to Supabase PostgreSQL");
+    client.release(); // release the client back to the pool
+  })
+  .catch(err => console.error("❌ Connection error:", err.stack));
 
-// Create db object with query method
-const db = {
-  query: (text, params) => pool.query(text, params),
-  
-  // Optional: Add helper methods if needed
-  getClient: () => pool.connect(),
-};
-
-// Export as default
 export default db;
+
