@@ -2,13 +2,15 @@ import pg from 'pg';
 
 const { Client } = pg;
 
-// ✅ Replace this with your actual Supabase database password
-const connectionString = 'postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu@9728229828@aws-0-ap-south-1.pooler.supabase.com:5432/postgres';
 
 const db = new Client({
-  connectionString,
+  host: 'aws-0-ap-south-1.pooler.supabase.com',
+  port: 5432,
+  user: 'postgres.ebxdyaymxnmtstmtkazo',
+  password: 'Sonu@9728229828',
+  database: 'postgres',
   ssl: {
-    rejectUnauthorized: false, // Needed for Supabase's SSL requirement
+    rejectUnauthorized: false,
   },
 });
 
