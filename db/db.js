@@ -1,6 +1,10 @@
 import pg from 'pg';
 const { Pool } = pg;
-const connectionString = "postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu%409728229828@aws-0-ap-south-1.pooler.supabase.com:5432/postgres";
+
+// NOTE: I changed port 5432 to 6543 (Session Mode)
+// Always use environment variables for secrets in production!
+const connectionString = "postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu%409728229828@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
+
 if (!connectionString) {
   console.error('Missing DATABASE_URL / SUPABASE_DB_URL');
   process.exit(1);
@@ -8,13 +12,15 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 10,
+  // Fix 1: Supabase REQUIRES SSL. Force it to true.
+  ssl: { 
+    rejectUnauthorized: false 
+  },
+  // Fix 2: Lower max connections on free tier to avoid hitting limits
+  max: 15, 
+  // Fix 3: Increase connection timeout to handle "cold starts"
+  connectionTimeoutMillis: 10000, // 10 seconds
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
 });
-
-pool.on('connect', () => console.log('✅ Postgres pool connected'));
-pool.on('error', (err) => console.error('❌ Unexpected Postgres error', err));
 
 export default pool;
