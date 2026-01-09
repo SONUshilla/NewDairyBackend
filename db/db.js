@@ -1,80 +1,67 @@
-// dbWrapper.js - Smart wrapper that maintains db.query() interface
+// dbWrapper.js
 import pg from 'pg';
 const { Pool } = pg;
 
-// Configuration for Supabase
 const getPoolConfig = () => {
-  const connectionString = process.env.DATABASE_URL || 
-    "postgresql://postgres.ebxdyaymxnmtstmtkazo:Sonu%409728229828@aws-0-ap-south-1.pooler.supabase.com:6543/postgres";
-  
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('Missing DATABASE_URL env var');
+  }
+
   return {
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: 5, // Keep it low for free tier
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    // Enable keepalive to prevent timeouts
-    keepAlive: true,
-    // Close and reopen connections periodically
-    maxLifetimeMillis: 1800000, // 30 minutes
+    max: parseInt(process.env.DB_MAX_CLIENTS || '6', 10), // tune per environment
+    idleTimeoutMillis: 30000, // 30s
+    connectionTimeoutMillis: 10000, // 10s
+    // socket keepalive is enabled by PG client when pool.connect() used; additional options not required here
   };
 };
 
 class DatabaseWrapper {
   constructor() {
-    this.pool = null;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.init();
+    this.pool = new Pool(getPoolConfig());
+    this._attachPoolListeners();
+    // start lightweight keepalive
+    this._startHeartbeat();
   }
 
-  init() {
-    try {
-      const config = getPoolConfig();
-      this.pool = new Pool(config);
-      
-      this.pool.on('connect', () => {
-        console.log('✅ Database connected');
-        this.reconnectAttempts = 0; // Reset on successful connection
-      });
+  _attachPoolListeners() {
+    this.pool.on('connect', () => {
+      console.log('✅ Database connected');
+    });
 
-      this.pool.on('error', (err) => {
-        console.error('❌ Database pool error:', err.message);
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.reconnectAttempts++;
-          console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-          setTimeout(() => this.init(), 5000);
-        }
-      });
-
-      // Test connection immediately
-      this.testConnection();
-    } catch (error) {
-      console.error('Failed to initialize database:', error);
-    }
+    this.pool.on('error', (err) => {
+      // This event is for idle client errors — log and let the pool manage reconnection
+      console.error('❌ Database pool error:', err && err.message ? err.message : err);
+    });
   }
 
-  async testConnection() {
-    try {
-      const client = await this.pool.connect();
-      console.log('✅ Database connection test successful');
-      client.release();
-    } catch (err) {
-      console.error('❌ Database connection test failed:', err.message);
-    }
+  _startHeartbeat() {
+    // Run a tiny query periodically to keep connections warm and detect broken sockets.
+    const intervalMs = parseInt(process.env.DB_HEARTBEAT_MS || '60000', 10); // 60s
+    this._heartbeat = setInterval(async () => {
+      try {
+        const client = await this.pool.connect();
+        await client.query('SELECT 1');
+        client.release();
+      } catch (err) {
+        console.warn('DB heartbeat failed:', err && err.message ? err.message : err);
+      }
+    }, intervalMs);
+    if (this._heartbeat.unref) this._heartbeat.unref(); // allow process to exit
   }
 
   async query(text, params) {
-    let client;
+    const client = await this.pool.connect();
     try {
-      client = await this.pool.connect();
-      const result = await client.query(text, params);
-      return result;
+      return await client.query(text, params);
     } catch (err) {
-      console.error('Query error:', err.message);
+      // Convert common transient errors to a clearer message
+      console.error('Query error:', err.message || err);
       throw err;
     } finally {
-      if (client) client.release();
+      client.release();
     }
   }
 
@@ -83,12 +70,10 @@ class DatabaseWrapper {
   }
 
   async end() {
+    clearInterval(this._heartbeat);
     return this.pool.end();
   }
 }
 
-// Create singleton instance
 const db = new DatabaseWrapper();
-
-// Export with the same interface as before
 export default db;
