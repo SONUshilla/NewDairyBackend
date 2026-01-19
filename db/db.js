@@ -3,14 +3,13 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const getPoolConfig = () => {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = "postgresql://mydbuser:mypassword@72.61.115.157:5432/mydatabase";
   if (!connectionString) {
     throw new Error('Missing DATABASE_URL env var');
   }
 
   return {
     connectionString,
-    ssl: { rejectUnauthorized: false },
     max: parseInt(process.env.DB_MAX_CLIENTS || '6', 10), // tune per environment
     idleTimeoutMillis: 30000, // 30s
     connectionTimeoutMillis: 10000, // 10s
